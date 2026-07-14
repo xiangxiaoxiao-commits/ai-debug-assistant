@@ -6,11 +6,12 @@ import { calculateEvidenceLevel } from '@/domain/evidence-level';
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string; evidenceId: string } }
+  { params }: { params: Promise<{ id: string; evidenceId: string }> }
 ) {
-  await deleteEvidence(params.id, params.evidenceId);
-  const remaining = await listEvidence(params.id);
-  const c = await getCase(params.id);
+  const { id, evidenceId } = await params;
+  await deleteEvidence(id, evidenceId);
+  const remaining = await listEvidence(id);
+  const c = await getCase(id);
   const level = calculateEvidenceLevel(remaining);
   const updated = await updateCase({ ...c, evidenceLevel: level });
   await upsertIndexEntry(updated);

@@ -11,10 +11,11 @@ const patchSchema = z.object({
   status: z.enum(['draft', 'running', 'blocked', 'done', 'error']).optional()
 });
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const c = await getCase(params.id);
-    const evidence = await listEvidence(params.id);
+    const { id } = await params;
+    const c = await getCase(id);
+    const evidence = await listEvidence(id);
     const evidenceLevel = calculateEvidenceLevel(evidence);
     if (evidenceLevel !== c.evidenceLevel) {
       const updated = await updateCase({ ...c, evidenceLevel });
@@ -27,12 +28,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   }
 }
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   let body: unknown;
   try { body = await req.json(); } catch { return NextResponse.json({ error: 'invalid JSON' }, { status: 400 }); }
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  const existing = await getCase(params.id);
+  const existing = await getCase(id);
   const updated = await updateCase({
     ...existing,
     meta: parsed.data.meta ?? existing.meta,
@@ -42,8 +44,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   return NextResponse.json({ case: updated });
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
-  await deleteCase(params.id);
-  await removeIndexEntry(params.id);
-  return NextResponse.json({ deleted: params.id });
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  await deleteCase(id);
+  await removeIndexEntry(id);
+  return NextResponse.json({ deleted: id });
 }

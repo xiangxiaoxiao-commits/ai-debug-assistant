@@ -50,7 +50,7 @@ describe('cases API', () => {
     const created = await (await postCase(jsonReq({
       problem: { actual: 'a', expected: 'b', entry: 'c', environment: 'd' }
     }))).json();
-    const res = await getCaseRoute(emptyReq(), { params: { id: created.case.id } });
+    const res = await getCaseRoute(emptyReq(), { params: Promise.resolve({ id: created.case.id }) });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.case.id).toBe(created.case.id);
@@ -61,10 +61,10 @@ describe('cases API', () => {
     const created = await (await postCase(jsonReq({
       problem: { actual: 'a', expected: 'b', entry: 'c', environment: 'd' }
     }))).json();
-    const res = await deleteCaseRoute(emptyReq(), { params: { id: created.case.id } });
+    const res = await deleteCaseRoute(emptyReq(), { params: Promise.resolve({ id: created.case.id }) });
     expect(res.status).toBe(200);
 
-    const after = await getCaseRoute(emptyReq(), { params: { id: created.case.id } });
+    const after = await getCaseRoute(emptyReq(), { params: Promise.resolve({ id: created.case.id }) });
     expect(after.status).toBe(404);
   });
 });
