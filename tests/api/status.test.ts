@@ -31,14 +31,14 @@ describe('PATCH /api/cases/:id/status', () => {
     const kase = await createCase({
       problem: { actual: 'x', expected: 'y', entry: 'z', environment: 'test' }
     });
-    const res = await PATCH(patchReq(kase.id, { status: 'invalid-status' }), { params: { id: kase.id } });
+    const res = await PATCH(patchReq(kase.id, { status: 'invalid-status' }), { params: Promise.resolve({ id: kase.id }) });
     expect(res.status).toBe(400);
   });
 
   it('返回 404 when case not found', async () => {
     const res = await PATCH(
       patchReq('00000000-0000-0000-0000-000000000000', { status: 'resolved' }),
-      { params: { id: '00000000-0000-0000-0000-000000000000' } }
+      { params: Promise.resolve({ id: '00000000-0000-0000-0000-000000000000' }) }
     );
     expect(res.status).toBe(404);
   });
@@ -48,7 +48,7 @@ describe('PATCH /api/cases/:id/status', () => {
       problem: { actual: 'crash', expected: 'ok', entry: '/api', environment: 'prod' }
     });
 
-    const res = await PATCH(patchReq(kase.id, { status: 'resolved' }), { params: { id: kase.id } });
+    const res = await PATCH(patchReq(kase.id, { status: 'resolved' }), { params: Promise.resolve({ id: kase.id }) });
     expect(res.status).toBe(200);
 
     const body = await res.json();
@@ -65,7 +65,7 @@ describe('PATCH /api/cases/:id/status', () => {
       problem: { actual: 'x', expected: 'y', entry: 'z', environment: 'test' }
     });
 
-    await PATCH(patchReq(kase.id, { status: 'wont-fix' }), { params: { id: kase.id } });
+    await PATCH(patchReq(kase.id, { status: 'wont-fix' }), { params: Promise.resolve({ id: kase.id }) });
 
     const updated = await getCase(kase.id);
     expect(updated.status).toBe('done');
@@ -77,7 +77,7 @@ describe('PATCH /api/cases/:id/status', () => {
       problem: { actual: 'x', expected: 'y', entry: 'z', environment: 'test' }
     });
 
-    await PATCH(patchReq(kase.id, { status: 'investigating' }), { params: { id: kase.id } });
+    await PATCH(patchReq(kase.id, { status: 'investigating' }), { params: Promise.resolve({ id: kase.id }) });
 
     const updated = await getCase(kase.id);
     expect(updated.status).toBe('running');
@@ -89,7 +89,7 @@ describe('PATCH /api/cases/:id/status', () => {
       problem: { actual: 'x', expected: 'y', entry: 'z', environment: 'test' }
     });
 
-    await PATCH(patchReq(kase.id, { status: 'open' }), { params: { id: kase.id } });
+    await PATCH(patchReq(kase.id, { status: 'open' }), { params: Promise.resolve({ id: kase.id }) });
 
     const updated = await getCase(kase.id);
     expect(updated.summary?.status).toBe('open');
@@ -103,7 +103,7 @@ describe('PATCH /api/cases/:id/status', () => {
 
     await PATCH(
       patchReq(kase.id, { status: 'resolved', verificationNotes: '在生产环境验证，无复现' }),
-      { params: { id: kase.id } }
+      { params: Promise.resolve({ id: kase.id }) }
     );
 
     const updated = await getCase(kase.id);
@@ -115,8 +115,8 @@ describe('PATCH /api/cases/:id/status', () => {
       problem: { actual: 'x', expected: 'y', entry: 'z', environment: 'test' }
     });
 
-    await PATCH(patchReq(kase.id, { status: 'investigating' }), { params: { id: kase.id } });
-    await PATCH(patchReq(kase.id, { status: 'resolved' }), { params: { id: kase.id } });
+    await PATCH(patchReq(kase.id, { status: 'investigating' }), { params: Promise.resolve({ id: kase.id }) });
+    await PATCH(patchReq(kase.id, { status: 'resolved' }), { params: Promise.resolve({ id: kase.id }) });
 
     const updated = await getCase(kase.id);
     expect(updated.summary?.status).toBe('resolved');

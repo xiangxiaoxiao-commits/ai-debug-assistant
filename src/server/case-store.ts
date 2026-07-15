@@ -104,7 +104,9 @@ export async function updateMessage(
 
 export async function updateSummary(caseId: string, summary: BugSummary): Promise<void> {
   const kase = await getCase(caseId);
-  await updateCase({ ...kase, summary });
+  const updated = await updateCase({ ...kase, summary });
+  const { upsertIndexEntry } = await import('./index-store');
+  await upsertIndexEntry(updated);
 }
 
 export async function updateCaseStatus(caseId: string, status: BugStatus): Promise<void> {
@@ -119,5 +121,7 @@ export async function updateCaseStatus(caseId: string, status: BugStatus): Promi
   let caseStatus = kase.status;
   if (status === 'resolved' || status === 'wont-fix') caseStatus = 'done';
   else if (status === 'investigating') caseStatus = 'running';
-  await updateCase({ ...kase, summary, status: caseStatus });
+  const updated = await updateCase({ ...kase, summary, status: caseStatus });
+  const { upsertIndexEntry } = await import('./index-store');
+  await upsertIndexEntry(updated);
 }

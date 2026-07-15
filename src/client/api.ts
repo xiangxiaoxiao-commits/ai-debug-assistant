@@ -1,5 +1,5 @@
 'use client';
-import type { Case, Evidence, CaseIndexEntry, EvidenceType } from '@/domain/types';
+import type { Case, Evidence, CaseIndexEntry, EvidenceType, Message, BugSummary, BugStatus } from '@/domain/types';
 import type { ModelConfig, ModelCandidate } from '@/domain/model-config';
 
 async function j<T>(res: Response): Promise<T> {
@@ -45,9 +45,15 @@ export const api = {
     fetch(`/api/cases/${caseId}/quick-ingest`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text })
     }).then(j<{ createdIds: string[] }>),
-  analyzeStream: async function* (caseId: string): AsyncGenerator<AnalyzeChunk> {
-    const res = await fetch('/api/analyze', {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ caseId })
+  getMessages: (caseId: string) =>
+    fetch(`/api/cases/${caseId}/messages`).then(j<{ messages: Message[]; summary: BugSummary }>),
+  patchStatus: (caseId: string, body: { status: BugStatus; verificationNotes?: string }) =>
+    fetch(`/api/cases/${caseId}/status`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body)
+    }).then(j<{ summary: BugSummary }>),
+  sendMessage: async function* (caseId: string, text: string): AsyncGenerator<MessageChunk> {
+    const res = await fetch(`/api/cases/${caseId}/messages`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text })
     });
     if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}: ${await res.text().catch(() => '')}`);
     const reader = res.body.getReader();
@@ -62,14 +68,15 @@ export const api = {
       for (const frame of frames) {
         const line = frame.split('\n').find(l => l.startsWith('data: '));
         if (!line) continue;
-        try { yield JSON.parse(line.slice(6)) as AnalyzeChunk; } catch { /* skip malformed */ }
+        try { yield JSON.parse(line.slice(6)) as MessageChunk; } catch { /* skip malformed */ }
       }
     }
   }
 };
 
-export type AnalyzeChunk =
-  | { type: 'meta'; evidences: number; codeSnippets: number; promptChars: number }
+export type MessageChunk =
+  | { type: 'meta'; evidences: number; codeSnippets: number; promptChars: number; userMessageId: string }
   | { type: 'text'; text: string }
+  | { type: 'summary'; summary: BugSummary }
   | { type: 'error'; message: string }
-  | { type: 'done'; inputTokens?: number; outputTokens?: number };
+  | { type: 'done'; assistantMessageId?: string; inputTokens?: number; outputTokens?: number };

@@ -62,7 +62,7 @@ describe('POST /api/cases/:id/messages', () => {
     const kase = await createCase({
       problem: { actual: 'x', expected: 'y', entry: 'z', environment: 'test' }
     });
-    const res = await POST(postReq(kase.id, { text: 'hello' }), { params: { id: kase.id } });
+    const res = await POST(postReq(kase.id, { text: 'hello' }), { params: Promise.resolve({ id: kase.id }) });
     expect(res.status).toBe(400);
     expect(await res.text()).toContain('model not configured');
   });
@@ -76,7 +76,7 @@ describe('POST /api/cases/:id/messages', () => {
     });
     const res = await POST(
       postReq('00000000-0000-0000-0000-000000000000', { text: 'hi' }),
-      { params: { id: '00000000-0000-0000-0000-000000000000' } }
+      { params: Promise.resolve({ id: '00000000-0000-0000-0000-000000000000' }) }
     );
     expect(res.status).toBe(404);
   });
@@ -97,7 +97,7 @@ describe('POST /api/cases/:id/messages', () => {
         headers: { 'content-type': 'application/json' },
         body: 'not-json'
       }),
-      { params: { id: kase.id } }
+      { params: Promise.resolve({ id: kase.id }) }
     );
     expect(res.status).toBe(400);
   });
@@ -119,7 +119,7 @@ describe('POST /api/cases/:id/messages', () => {
       problem: { actual: 'crash', expected: 'ok', entry: '/api', environment: 'prod' }
     });
 
-    const res = await POST(postReq(kase.id, { text: 'what is the root cause?' }), { params: { id: kase.id } });
+    const res = await POST(postReq(kase.id, { text: 'what is the root cause?' }), { params: Promise.resolve({ id: kase.id }) });
 
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('text/event-stream');
@@ -161,7 +161,7 @@ describe('POST /api/cases/:id/messages', () => {
       problem: { actual: 'crash', expected: 'ok', entry: '/api', environment: 'prod' }
     });
 
-    const res = await POST(postReq(kase.id, { text: 'tell me more' }), { params: { id: kase.id } });
+    const res = await POST(postReq(kase.id, { text: 'tell me more' }), { params: Promise.resolve({ id: kase.id }) });
     await res.text(); // drain
 
     const updated = await getCase(kase.id);
@@ -189,7 +189,7 @@ describe('POST /api/cases/:id/messages', () => {
       problem: { actual: 'service crash on startup', expected: 'ok', entry: '/api', environment: 'prod' }
     });
 
-    const res = await POST(postReq(kase.id, { text: '' }), { params: { id: kase.id } });
+    const res = await POST(postReq(kase.id, { text: '' }), { params: Promise.resolve({ id: kase.id }) });
     await res.text(); // drain
 
     const updated = await getCase(kase.id);
@@ -200,7 +200,7 @@ describe('POST /api/cases/:id/messages', () => {
 describe('GET /api/cases/:id/messages', () => {
   it('返回 404 当 case 不存在', async () => {
     const res = await GET(getReq('00000000-0000-0000-0000-000000000000'), {
-      params: { id: '00000000-0000-0000-0000-000000000000' }
+      params: Promise.resolve({ id: '00000000-0000-0000-0000-000000000000' })
     });
     expect(res.status).toBe(404);
   });
@@ -210,7 +210,7 @@ describe('GET /api/cases/:id/messages', () => {
       problem: { actual: 'a', expected: 'b', entry: 'c', environment: 'd' }
     });
 
-    const res = await GET(getReq(kase.id), { params: { id: kase.id } });
+    const res = await GET(getReq(kase.id), { params: Promise.resolve({ id: kase.id }) });
     expect(res.status).toBe(200);
 
     const body = await res.json();
@@ -235,10 +235,10 @@ describe('GET /api/cases/:id/messages', () => {
       problem: { actual: 'crash', expected: 'ok', entry: '/api', environment: 'prod' }
     });
 
-    const postRes = await POST(postReq(kase.id, { text: 'what happened?' }), { params: { id: kase.id } });
+    const postRes = await POST(postReq(kase.id, { text: 'what happened?' }), { params: Promise.resolve({ id: kase.id }) });
     await postRes.text(); // drain
 
-    const getRes = await GET(getReq(kase.id), { params: { id: kase.id } });
+    const getRes = await GET(getReq(kase.id), { params: Promise.resolve({ id: kase.id }) });
     const body = await getRes.json();
 
     expect(body.messages).toHaveLength(2);
