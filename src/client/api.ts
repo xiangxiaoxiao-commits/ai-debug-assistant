@@ -40,5 +40,36 @@ export const api = {
       method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(cfg)
     }).then(j<{ config: ModelConfig }>),
   loadSavedModelConfig: () =>
-    fetch('/api/config/model').then(j<{ config: ModelConfig | null }>)
+    fetch('/api/config/model').then(j<{ config: ModelConfig | null }>),
+  quickIngest: (caseId: string, text: string) =>
+    fetch(`/api/cases/${caseId}/quick-ingest`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text })
+    }).then(j<{ createdIds: string[] }>),
+  analyzeStream: async function* (caseId: string): AsyncGenerator<AnalyzeChunk> {
+    const res = await fetch('/api/analyze', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ caseId })
+    });
+    if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}: ${await res.text().catch(() => '')}`);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const frames = buffer.split('\n\n');
+      buffer = frames.pop() ?? '';
+      for (const frame of frames) {
+        const line = frame.split('\n').find(l => l.startsWith('data: '));
+        if (!line) continue;
+        try { yield JSON.parse(line.slice(6)) as AnalyzeChunk; } catch { /* skip malformed */ }
+      }
+    }
+  }
 };
+
+export type AnalyzeChunk =
+  | { type: 'meta'; evidences: number; codeSnippets: number; promptChars: number }
+  | { type: 'text'; text: string }
+  | { type: 'error'; message: string }
+  | { type: 'done'; inputTokens?: number; outputTokens?: number };

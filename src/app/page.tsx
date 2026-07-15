@@ -1,122 +1,192 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import type { Case, CaseIndexEntry, Evidence, EvidenceType } from '@/domain/types';
+import type { CaseIndexEntry } from '@/domain/types';
+import type { ModelCandidate } from '@/domain/model-config';
 import { api } from '@/client/api';
 import { Header } from '@/components/layout/header';
-import { ThreeColumn } from '@/components/layout/three-column';
-import { ModelConfig } from '@/components/case/model-config';
-import { CaseForm } from '@/components/case/case-form';
 import { CaseList } from '@/components/case/case-list';
-import { EvidencePanel } from '@/components/evidence/evidence-panel';
-import { PipelineBar } from '@/components/pipeline/pipeline-bar';
-
-const ACTIVE_KEY = 'ada:active-case';
+import { QuickForm, type QuickFormValue } from '@/components/analyze/quick-form';
+import { ReportStream } from '@/components/analyze/report-stream';
+import { ConfigBanner } from '@/components/analyze/config-banner';
+import { SettingsModal } from '@/components/settings/settings-modal';
 
 export default function HomePage() {
   const [modelConfigured, setModelConfigured] = useState(false);
+  const [candidates, setCandidates] = useState<ModelCandidate[]>([]);
   const [cases, setCases] = useState<CaseIndexEntry[]>([]);
-  const [activeId, setActiveId] = useState<string | undefined>(undefined);
-  const [current, setCurrent] = useState<{ case: Case; evidence: Evidence[] } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [activeCaseId, setActiveCaseId] = useState<string | null>(null);
+  const [runToken, setRunToken] = useState(0);
+  const [historyProblem, setHistoryProblem] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [globalError, setGlobalError] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
-  const refreshCases = useCallback(async () => {
-    const { cases } = await api.listCases();
-    setCases(cases);
+  const refreshDiscover = useCallback(async () => {
+    try {
+      const r = await api.discoverConfig();
+      setCandidates(r.candidates);
+      setModelConfigured(Boolean(r.saved));
+    } catch (e) {
+      setGlobalError((e as Error).message);
+    }
   }, []);
 
-  const loadCase = useCallback(async (id: string) => {
+  const refreshCases = useCallback(async () => {
     try {
-      const data = await api.getCase(id);
-      setCurrent(data);
-      setActiveId(id);
-      sessionStorage.setItem(ACTIVE_KEY, id);
+      const r = await api.listCases();
+      setCases(r.cases);
     } catch (e) {
-      setError((e as Error).message);
-      setCurrent(null);
-      setActiveId(undefined);
-      sessionStorage.removeItem(ACTIVE_KEY);
+      setGlobalError((e as Error).message);
     }
   }, []);
 
   useEffect(() => {
-    refreshCases().catch(e => setError((e as Error).message));
-    const stored = sessionStorage.getItem(ACTIVE_KEY);
-    if (stored) loadCase(stored);
-  }, [refreshCases, loadCase]);
+    refreshDiscover();
+    refreshCases();
+  }, [refreshDiscover, refreshCases]);
 
-  const handleCreated = async (id: string) => {
-    await refreshCases();
-    await loadCase(id);
-  };
-
-  const handleDelete = async (id: string) => {
-    await api.deleteCase(id);
-    if (activeId === id) {
-      setActiveId(undefined);
-      setCurrent(null);
-      sessionStorage.removeItem(ACTIVE_KEY);
+  const handleAnalyze = async (v: QuickFormValue) => {
+    if (!modelConfigured) return;
+    setSubmitting(true);
+    setGlobalError(null);
+    try {
+      const firstLine = v.problem.split('\n').find(l => l.trim())?.trim() ?? '排障问题';
+      const payload = {
+        problem: {
+          actual: v.problem,
+          expected: '正常工作 / 见问题描述',
+          entry: v.entry || firstLine.slice(0, 80),
+          environment: v.environment || '见问题描述'
+        },
+        meta: {
+          ...(v.repoPath ? { repoPath: v.repoPath } : {}),
+          ...(v.module ? { module: v.module } : {})
+        }
+      };
+      const created = await api.createCase(payload);
+      await api.quickIngest(created.case.id, v.problem);
+      setActiveCaseId(created.case.id);
+      setHistoryProblem(null);
+      setRunToken(t => t + 1);
+      await refreshCases();
+    } catch (e) {
+      setGlobalError((e as Error).message);
+    } finally {
+      setSubmitting(false);
     }
-    await refreshCases();
   };
 
-  const handleAddEvidence = async (type: EvidenceType, content: string) => {
-    if (!activeId) return;
-    await api.addEvidence(activeId, { type, content });
-    await loadCase(activeId);
-    await refreshCases();
+  const handleSelectHistory = async (id: string) => {
+    try {
+      const r = await api.getCase(id);
+      setActiveCaseId(id);
+      setHistoryProblem(r.case.problem.actual);
+      setRunToken(t => t + 1);
+    } catch (e) {
+      setGlobalError((e as Error).message);
+    }
   };
 
-  const handleDeleteEvidence = async (evidenceId: string) => {
-    if (!activeId) return;
-    await api.deleteEvidence(activeId, evidenceId);
-    await loadCase(activeId);
-    await refreshCases();
+  const handleDeleteCase = async (id: string) => {
+    try {
+      await api.deleteCase(id);
+      if (activeCaseId === id) {
+        setActiveCaseId(null);
+        setHistoryProblem(null);
+      }
+      await refreshCases();
+    } catch (e) {
+      setGlobalError((e as Error).message);
+    }
+  };
+
+  const handleNewSession = () => {
+    setActiveCaseId(null);
+    setHistoryProblem(null);
+    setRunToken(0);
+  };
+
+  const handleRerun = () => {
+    if (activeCaseId) setRunToken(t => t + 1);
   };
 
   return (
     <>
       <Header
         modelConfigured={modelConfigured}
-        currentCaseTitle={current?.case.problem.actual.split('\n')[0]}
-        onExport={activeId ? () => window.open(api.exportCase(activeId), '_blank') : undefined}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onNewSession={activeCaseId ? handleNewSession : undefined}
       />
-      <ThreeColumn
-        left={
-          <div className="space-y-4">
-            <ModelConfig onChange={setModelConfigured} />
-            <CaseForm onCreated={handleCreated} />
-            <div>
-              <div className="text-xs uppercase tracking-wide text-slate-400 mb-1">历史 Case</div>
-              <CaseList cases={cases} activeId={activeId} onSelect={loadCase} onDelete={handleDelete} />
+
+      <div className="grid grid-cols-[240px_1fr] gap-3 p-3 h-[calc(100vh-49px)] overflow-hidden">
+        <aside className="overflow-y-auto rounded border border-slate-800 bg-slate-900/40 p-3">
+          <div className="text-xs uppercase tracking-wide text-slate-400 mb-2">历史记录</div>
+          <CaseList
+            cases={cases}
+            activeId={activeCaseId ?? undefined}
+            onSelect={handleSelectHistory}
+            onDelete={handleDeleteCase}
+          />
+        </aside>
+
+        <main className="overflow-y-auto rounded border border-slate-800 bg-slate-900/40 p-4">
+          {!modelConfigured && (
+            <ConfigBanner
+              candidates={candidates}
+              onConfigured={() => { setModelConfigured(true); refreshDiscover(); }}
+              onOpenSettings={() => setSettingsOpen(true)}
+            />
+          )}
+
+          {globalError && (
+            <div className="mb-3 border border-rose-800 bg-rose-950/30 rounded p-2 text-xs text-rose-300 flex items-center gap-2">
+              <span>⚠ {globalError}</span>
+              <button onClick={() => setGlobalError(null)} className="ml-auto text-slate-400 hover:text-slate-200">×</button>
             </div>
-          </div>
-        }
-        center={
-          current ? (
-            <div className="space-y-4">
-              <PipelineBar pipeline={current.case.pipeline} />
-              <EvidencePanel
-                currentCase={current.case}
-                evidence={current.evidence}
-                onAdd={handleAddEvidence}
-                onDelete={handleDeleteEvidence}
-              />
+          )}
+
+          {historyProblem !== null ? (
+            <div className="space-y-3">
+              <div className="border border-slate-800 rounded p-3 bg-slate-900/40">
+                <div className="text-[10px] uppercase tracking-wide text-slate-500 mb-1">历史查看</div>
+                <div className="text-sm text-slate-200 whitespace-pre-wrap max-h-40 overflow-y-auto">
+                  {historyProblem}
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    onClick={handleRerun}
+                    disabled={!modelConfigured}
+                    className="text-xs px-3 py-1 rounded bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700"
+                  >
+                    重新分析
+                  </button>
+                  <button
+                    onClick={handleNewSession}
+                    className="text-xs px-3 py-1 rounded bg-slate-800 hover:bg-slate-700"
+                  >
+                    ← 新建
+                  </button>
+                </div>
+              </div>
+              <ReportStream caseId={activeCaseId} runToken={runToken} />
             </div>
           ) : (
-            <div className="text-center text-slate-500 py-16 text-sm">
-              选择左侧一个 Case，或点「创建 Case」开始一次排障。
-            </div>
-          )
-        }
-        right={
-          <div className="space-y-2">
-            <div className="text-xs uppercase tracking-wide text-slate-400">报告</div>
-            <div className="text-xs text-slate-500">
-              Phase 1 未接入 LLM。Phase 2 完成后此处将展示结构化诊断报告。
-            </div>
-            {error && <div className="text-xs text-rose-400">{error}</div>}
-          </div>
-        }
+            <>
+              <QuickForm
+                disabled={!modelConfigured}
+                submitting={submitting}
+                onSubmit={handleAnalyze}
+              />
+              <ReportStream caseId={activeCaseId} runToken={runToken} />
+            </>
+          )}
+        </main>
+      </div>
+
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onSaved={() => { setModelConfigured(true); refreshDiscover(); }}
       />
     </>
   );
