@@ -30,3 +30,7 @@ export function evidenceFile(caseId: string, evidenceId: string): string {
 export function indexFile(): string {
   return path.join(casesDir(), 'index.json');
 }
+
+export function configFile(): string {
+  return path.join(getRoot(), 'config.json');
+}
