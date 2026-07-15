@@ -28,7 +28,9 @@ function toEntry(c: Case): CaseIndexEntry {
     createdAt: c.createdAt,
     updatedAt: c.updatedAt,
     repoPath: c.meta?.repoPath,
-    status: c.status
+    status: c.status,
+    bugStatus: c.summary?.status,
+    headline: c.summary?.headline
   };
 }
 

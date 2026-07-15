@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildAnalyzePrompt } from '@/server/prompt-builder';
-import type { CaseProblem, CaseMeta, Evidence } from '@/domain/types';
+import { buildAnalyzePrompt, buildConversationPrompt } from '@/server/prompt-builder';
+import type { CaseProblem, CaseMeta, Evidence, Message, BugSummary } from '@/domain/types';
 
 function makeProblem(overrides?: Partial<CaseProblem>): CaseProblem {
   return {
@@ -37,6 +37,15 @@ function makeEvidence(n: number): Evidence {
       keywords: ['NullPointerException', 'UserService'],
       tokensEstimate: 15
     }
+  };
+}
+
+function makeMessage(role: 'user' | 'assistant' | 'system-summary', content: string): Message {
+  return {
+    id: `msg-${Math.random().toString(36).slice(2)}`,
+    role,
+    createdAt: new Date().toISOString(),
+    content
   };
 }
 
@@ -148,5 +157,112 @@ describe('buildAnalyzePrompt', () => {
     // buildAnalyzePrompt does not set these; they default in streamLlm
     expect(opts.maxTokens).toBeUndefined();
     expect(opts.temperature).toBeUndefined();
+  });
+});
+
+describe('buildConversationPrompt', () => {
+  it('system prompt 包含多轮对话说明', () => {
+    const opts = buildConversationPrompt({
+      problem: makeProblem(),
+      evidences: [],
+      messages: []
+    });
+    expect(opts.systemPrompt).toContain('多轮排障对话');
+  });
+
+  it('user prompt 包含 Bug 摘要区块（首次）', () => {
+    const opts = buildConversationPrompt({
+      problem: makeProblem(),
+      evidences: [],
+      messages: []
+    });
+    expect(opts.userPrompt).toContain('当前 Bug 摘要');
+    expect(opts.userPrompt).toContain('首次分析');
+  });
+
+  it('user prompt 包含已有 summary 内容', () => {
+    const summary: BugSummary = {
+      status: 'investigating',
+      headline: 'NPE in UserService',
+      rootCause: '未做 null 检查',
+      updatedAt: new Date().toISOString(),
+      updatedBy: 'llm'
+    };
+    const opts = buildConversationPrompt({
+      problem: makeProblem(),
+      evidences: [],
+      messages: [],
+      currentSummary: summary
+    });
+    expect(opts.userPrompt).toContain('investigating');
+    expect(opts.userPrompt).toContain('NPE in UserService');
+    expect(opts.userPrompt).toContain('未做 null 检查');
+  });
+
+  it('对话历史渲染在 user prompt 中', () => {
+    const messages: Message[] = [
+      makeMessage('user', '用户第一条消息'),
+      makeMessage('assistant', '助手第一轮回复')
+    ];
+    const opts = buildConversationPrompt({
+      problem: makeProblem(),
+      evidences: [],
+      messages
+    });
+    expect(opts.userPrompt).toContain('用户第一条消息');
+    expect(opts.userPrompt).toContain('助手第一轮回复');
+  });
+
+  it('system-summary 角色消息渲染为背景摘要', () => {
+    const messages: Message[] = [
+      makeMessage('system-summary', '早期对话的背景摘要'),
+      makeMessage('user', '最新问题')
+    ];
+    const opts = buildConversationPrompt({
+      problem: makeProblem(),
+      evidences: [],
+      messages
+    });
+    expect(opts.userPrompt).toContain('背景摘要');
+    expect(opts.userPrompt).toContain('早期对话的背景摘要');
+  });
+
+  it('超过字符限制时触发压缩，保留最新消息', () => {
+    // Create many large messages to trigger compaction
+    const messages: Message[] = Array.from({ length: 20 }, (_, i) =>
+      makeMessage(i % 2 === 0 ? 'user' : 'assistant', 'x'.repeat(2000))
+    );
+    const lastUserMsg = makeMessage('user', '最终用户消息内容');
+    messages.push(lastUserMsg);
+
+    const opts = buildConversationPrompt({
+      problem: makeProblem(),
+      evidences: [],
+      messages
+    });
+
+    const totalChars = opts.userPrompt.length + opts.systemPrompt.length;
+    // Should be bounded near 30k
+    expect(totalChars).toBeLessThan(40_000);
+    // Latest message must be preserved
+    expect(opts.userPrompt).toContain('最终用户消息内容');
+  });
+
+  it('包含证据计数和代码上下文', () => {
+    const opts = buildConversationPrompt({
+      problem: makeProblem(),
+      evidences: [makeEvidence(1)],
+      messages: []
+    });
+    expect(opts.userPrompt).toContain('已收集证据（1 条）');
+  });
+
+  it('包含当前任务区块', () => {
+    const opts = buildConversationPrompt({
+      problem: makeProblem(),
+      evidences: [],
+      messages: []
+    });
+    expect(opts.userPrompt).toContain('当前任务');
   });
 });

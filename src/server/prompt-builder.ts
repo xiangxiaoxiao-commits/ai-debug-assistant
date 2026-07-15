@@ -1,4 +1,4 @@
-import type { CaseProblem, CaseMeta, Evidence } from '@/domain/types';
+import type { CaseProblem, CaseMeta, Evidence, Message, BugSummary } from '@/domain/types';
 import type { LlmCallOptions } from './llm-client';
 import type { CodeReadResult } from './code-reader';
 
@@ -96,6 +96,149 @@ export function buildAnalyzePrompt(input: {
 
   return {
     systemPrompt: SYSTEM_PROMPT,
+    userPrompt
+  };
+}
+
+const CONVERSATION_SYSTEM_PROMPT = `你是一名资深工程排障助手。这是一次多轮排障对话。用户可能在后续消息里补充证据、修正描述、追问细节，你要基于**累计的证据**和**当前诊断结论**回答。如果新信息推翻了前一轮的结论，明确说出「修正：…」。
+
+原则：
+1. 明确列出「你已确认的事实」和「你的假设」，不要混淆。
+2. 每条结论尽量指向具体证据（例如「日志第 3 行的 NPE」「controller 中未调用 dictService」）。
+3. 如果证据不足，明确说明还需要什么信息，而不是硬猜。
+4. 修复建议要给到函数级或文件级，最好带示例代码。
+5. 全程用中文回答，代码保持原样。
+6. 你并不知道所有内部实现细节；如果代码片段被截断或未提供，明确说明。
+
+输出结构（Markdown）：
+## 一句话结论
+## 已确认的事实
+## 推断的根因（按可能性排序）
+## 建议的验证步骤
+## 建议的修复方案
+## 还需要什么信息（如有）`;
+
+const MAX_CONVERSATION_PROMPT_CHARS = 30_000;
+const COMPACTION_FIRST_SENTENCE_MAX = 120;
+
+function renderBugSummary(s: BugSummary): string {
+  const lines: string[] = [`- 状态：${s.status}`];
+  if (s.headline) lines.push(`- 结论：${s.headline}`);
+  if (s.rootCause) lines.push(`- 根因：${s.rootCause}`);
+  if (s.fixApproach) lines.push(`- 修复方案：${s.fixApproach}`);
+  if (s.verified !== undefined) lines.push(`- 已验证：${s.verified ? '是' : '否'}`);
+  if (s.verificationNotes) lines.push(`- 验证说明：${s.verificationNotes}`);
+  return lines.join('\n');
+}
+
+function firstSentence(text: string): string {
+  const trimmed = text.trim();
+  // Break at first sentence ending or newline
+  const match = trimmed.match(/^(.{1,120}[。.!！\n])/);
+  if (match) return match[1].trim();
+  return trimmed.slice(0, COMPACTION_FIRST_SENTENCE_MAX) + (trimmed.length > COMPACTION_FIRST_SENTENCE_MAX ? '…' : '');
+}
+
+function buildHistorySection(messages: Message[], charBudget: number): string {
+  if (messages.length === 0) return '';
+
+  // Separate system-summary messages (place before history)
+  const summaryMsgs = messages.filter(m => m.role === 'system-summary');
+  const roundMsgs = messages.filter(m => m.role !== 'system-summary');
+
+  const summaryPart = summaryMsgs.map(m => `### 背景摘要\n${m.content}`).join('\n\n');
+
+  // Build round-by-round, newest messages take priority
+  const roundParts: string[] = [];
+  let used = summaryPart.length;
+  let compacted = 0;
+
+  for (let i = roundMsgs.length - 1; i >= 0; i--) {
+    const m = roundMsgs[i];
+    const roleLabel = m.role === 'user' ? '**用户**' : '**助手**';
+    const entry = `${roleLabel}：${m.content}`;
+    if (used + entry.length > charBudget && i < roundMsgs.length - 1) {
+      // Compact this and all earlier messages
+      compacted = i + 1;
+      break;
+    }
+    roundParts.unshift(entry);
+    used += entry.length;
+  }
+
+  const parts: string[] = [];
+  if (summaryPart) parts.push(summaryPart);
+
+  if (compacted > 0) {
+    const condensed = roundMsgs.slice(0, compacted)
+      .map(m => {
+        const roleLabel = m.role === 'user' ? '用户' : '助手';
+        return `${roleLabel}：${firstSentence(m.content)}`;
+      })
+      .join('\n');
+    parts.push(`## 早期对话摘要\n${condensed}`);
+  }
+
+  if (roundParts.length > 0) {
+    parts.push(roundParts.join('\n\n'));
+  }
+
+  return parts.join('\n\n');
+}
+
+export function buildConversationPrompt(input: {
+  problem: CaseProblem;
+  meta?: CaseMeta;
+  evidences: Evidence[];
+  code?: CodeReadResult;
+  messages: Message[];
+  currentSummary?: BugSummary;
+}): LlmCallOptions {
+  const { problem, meta, evidences, code, messages, currentSummary } = input;
+
+  const summarySection = currentSummary
+    ? `## 当前 Bug 摘要\n${renderBugSummary(currentSummary)}`
+    : `## 当前 Bug 摘要\n（首次分析，尚无摘要）`;
+
+  const problemSection = `## 问题描述
+- 实际现象：${problem.actual}
+- 期望行为：${problem.expected}
+- 入口：${problem.entry}
+- 环境：${problem.environment}
+- 模块：${meta?.module ?? '(未指定)'}
+- 仓库：${meta?.repoPath ?? '(未指定)'}`;
+
+  const codeSection = code ? buildCodeSection(code) : '（未提供代码上下文）';
+  const codePart = `## 代码上下文\n${codeSection}`;
+
+  const taskPart = `## 当前任务\n基于以上，回答用户的最新消息。保持结构化输出（一句话结论 / 已确认事实 / 根因假设 / 建议验证 / 建议修复 / 还需要什么信息）。`;
+
+  // Calculate budget for evidence + history
+  const fixedChars =
+    CONVERSATION_SYSTEM_PROMPT.length +
+    summarySection.length +
+    problemSection.length +
+    codePart.length +
+    taskPart.length +
+    200;
+  const remaining = Math.max(4000, MAX_CONVERSATION_PROMPT_CHARS - fixedChars);
+  const evidenceBudget = Math.floor(remaining * 0.6);
+  const historyBudget = remaining - evidenceBudget;
+
+  const { text: evidenceText } = buildEvidenceSection(evidences, evidenceBudget);
+  const evidenceSection = `## 已收集证据（${evidences.length} 条）\n${evidenceText}`;
+
+  const historyText = buildHistorySection(messages, historyBudget);
+  const historySection = historyText ? `## 对话历史\n${historyText}` : '';
+
+  const parts = [summarySection, problemSection, evidenceSection, codePart];
+  if (historySection) parts.push(historySection);
+  parts.push(taskPart);
+
+  const userPrompt = parts.join('\n\n');
+
+  return {
+    systemPrompt: CONVERSATION_SYSTEM_PROMPT,
     userPrompt
   };
 }

@@ -3,7 +3,11 @@ import {
   caseProblemSchema,
   createCaseInputSchema,
   addEvidenceInputSchema,
-  pipelineStateSchema
+  pipelineStateSchema,
+  bugSummarySchema,
+  messageSchema,
+  caseSchema,
+  caseIndexEntrySchema
 } from '@/domain/schemas';
 import { STEP_NAMES } from '@/domain/constants';
 
@@ -52,5 +56,143 @@ describe('pipelineStateSchema', () => {
       runIds: []
     };
     expect(pipelineStateSchema.safeParse(state).success).toBe(true);
+  });
+});
+
+describe('bugSummarySchema', () => {
+  it('接受最小必填字段', () => {
+    const r = bugSummarySchema.safeParse({
+      status: 'open',
+      updatedAt: new Date().toISOString(),
+      updatedBy: 'user'
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('接受全部字段', () => {
+    const r = bugSummarySchema.safeParse({
+      status: 'resolved',
+      headline: '服务崩溃',
+      rootCause: 'NPE',
+      fixApproach: '加 null 检查',
+      verified: true,
+      verificationNotes: '复现后修复',
+      updatedAt: new Date().toISOString(),
+      updatedBy: 'llm'
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('拒绝非法 status', () => {
+    const r = bugSummarySchema.safeParse({
+      status: 'unknown',
+      updatedAt: new Date().toISOString(),
+      updatedBy: 'llm'
+    });
+    expect(r.success).toBe(false);
+  });
+});
+
+describe('messageSchema', () => {
+  it('接受 user 角色消息', () => {
+    const r = messageSchema.safeParse({
+      id: '00000000-0000-0000-0000-000000000001',
+      role: 'user',
+      createdAt: new Date().toISOString(),
+      content: '测试消息'
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('接受 system-summary 角色', () => {
+    const r = messageSchema.safeParse({
+      id: '00000000-0000-0000-0000-000000000002',
+      role: 'system-summary',
+      createdAt: new Date().toISOString(),
+      content: '背景摘要内容'
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('接受带 ingested 字段的消息', () => {
+    const r = messageSchema.safeParse({
+      id: '00000000-0000-0000-0000-000000000003',
+      role: 'user',
+      createdAt: new Date().toISOString(),
+      content: 'text',
+      ingested: { evidenceIds: ['ev-1', 'ev-2'] }
+    });
+    expect(r.success).toBe(true);
+  });
+});
+
+describe('caseSchema — Phase 3 optional fields', () => {
+  function baseCase() {
+    return {
+      id: '00000000-0000-0000-0000-000000000001',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      status: 'draft' as const,
+      problem: { actual: 'a', expected: 'b', entry: 'c', environment: 'd' },
+      evidenceLevel: 'L0' as const,
+      pipeline: {
+        currentStep: 'Normalize' as const,
+        steps: STEP_NAMES.map(step => ({ step, status: 'waiting' as const })),
+        runIds: []
+      }
+    };
+  }
+
+  it('老 case.json（无 messages/summary）仍可解析', () => {
+    const r = caseSchema.safeParse(baseCase());
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.messages).toBeUndefined();
+      expect(r.data.summary).toBeUndefined();
+    }
+  });
+
+  it('带 messages 和 summary 的 case 可解析', () => {
+    const r = caseSchema.safeParse({
+      ...baseCase(),
+      messages: [{
+        id: '00000000-0000-0000-0000-000000000002',
+        role: 'user',
+        createdAt: new Date().toISOString(),
+        content: '测试'
+      }],
+      summary: {
+        status: 'investigating',
+        updatedAt: new Date().toISOString(),
+        updatedBy: 'llm'
+      }
+    });
+    expect(r.success).toBe(true);
+  });
+});
+
+describe('caseIndexEntrySchema — Phase 3 optional fields', () => {
+  it('老索引条目（无 bugStatus/headline）仍可解析', () => {
+    const r = caseIndexEntrySchema.safeParse({
+      id: '00000000-0000-0000-0000-000000000001',
+      title: 'test',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      status: 'draft'
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('带 bugStatus 和 headline 可解析', () => {
+    const r = caseIndexEntrySchema.safeParse({
+      id: '00000000-0000-0000-0000-000000000001',
+      title: 'test',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      status: 'running',
+      bugStatus: 'investigating',
+      headline: '接口 500 错误'
+    });
+    expect(r.success).toBe(true);
   });
 });

@@ -7,6 +7,32 @@ export const caseStatusSchema = z.enum(CASE_STATUSES);
 export const evidenceTypeSchema = z.enum(EVIDENCE_TYPES);
 export const evidenceLevelSchema = z.enum(EVIDENCE_LEVELS);
 
+export const bugStatusSchema = z.enum(['open', 'investigating', 'resolved', 'wont-fix']);
+
+export const bugSummarySchema = z.object({
+  status: bugStatusSchema,
+  headline: z.string().optional(),
+  rootCause: z.string().optional(),
+  fixApproach: z.string().optional(),
+  verified: z.boolean().optional(),
+  verificationNotes: z.string().optional(),
+  updatedAt: z.string(),
+  updatedBy: z.enum(['llm', 'user'])
+});
+
+export const messageSchema = z.object({
+  id: z.string().uuid(),
+  role: z.enum(['user', 'assistant', 'system-summary']),
+  createdAt: z.string(),
+  content: z.string(),
+  ingested: z.object({ evidenceIds: z.array(z.string()) }).optional(),
+  meta: z.object({
+    inputTokens: z.number().optional(),
+    outputTokens: z.number().optional(),
+    durationMs: z.number().optional()
+  }).optional()
+});
+
 export const pipelineStepSchema = z.object({
   step: stepNameSchema,
   status: stepStatusSchema,
@@ -64,7 +90,9 @@ export const caseSchema = z.object({
   reportId: z.string().optional(),
   modelSnapshot: z.object({
     provider: z.string(), baseUrl: z.string(), model: z.string()
-  }).optional()
+  }).optional(),
+  messages: z.array(messageSchema).optional(),
+  summary: bugSummarySchema.optional()
 });
 
 export const evidenceSchema = z.object({
@@ -107,5 +135,7 @@ export const caseIndexEntrySchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   repoPath: z.string().optional(),
-  status: caseStatusSchema
+  status: caseStatusSchema,
+  bugStatus: bugStatusSchema.optional(),
+  headline: z.string().optional()
 });

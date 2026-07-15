@@ -6,6 +6,28 @@ export type CaseStatus = (typeof CASE_STATUSES)[number];
 export type EvidenceType = (typeof EVIDENCE_TYPES)[number];
 export type EvidenceLevel = (typeof EVIDENCE_LEVELS)[number];
 
+export type BugStatus = 'open' | 'investigating' | 'resolved' | 'wont-fix';
+
+export interface BugSummary {
+  status: BugStatus;
+  headline?: string;
+  rootCause?: string;
+  fixApproach?: string;
+  verified?: boolean;
+  verificationNotes?: string;
+  updatedAt: string;
+  updatedBy: 'llm' | 'user';
+}
+
+export interface Message {
+  id: string;
+  role: 'user' | 'assistant' | 'system-summary';
+  createdAt: string;
+  content: string;
+  ingested?: { evidenceIds: string[] };
+  meta?: { inputTokens?: number; outputTokens?: number; durationMs?: number };
+}
+
 export interface PipelineStep {
   step: StepName;
   status: StepStatus;
@@ -62,6 +84,8 @@ export interface Case {
   pipeline: PipelineState;
   reportId?: string;
   modelSnapshot?: { provider: string; baseUrl: string; model: string };
+  messages?: Message[];
+  summary?: BugSummary;
 }
 
 export interface Evidence {
@@ -83,4 +107,6 @@ export interface CaseIndexEntry {
   updatedAt: string;
   repoPath?: string;
   status: CaseStatus;
+  bugStatus?: BugStatus;
+  headline?: string;
 }
