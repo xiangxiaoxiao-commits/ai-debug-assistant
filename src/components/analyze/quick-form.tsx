@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { FolderPicker } from './folder-picker';
 
 export interface QuickFormValue {
   problem: string;
@@ -18,6 +19,7 @@ interface Props {
 export function QuickForm({ disabled, submitting, onSubmit }: Props) {
   const [problem, setProblem] = useState('');
   const [repoPath, setRepoPath] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [advanced, setAdvanced] = useState(false);
   const [entry, setEntry] = useState('');
   const [environment, setEnvironment] = useState('');
@@ -58,14 +60,25 @@ export function QuickForm({ disabled, submitting, onSubmit }: Props) {
       <div className="flex gap-2 items-end">
         <div className="flex-1">
           <label className="block text-xs text-slate-400 mb-1">代码仓库路径（可选，填了会让 AI 读代码）</label>
-          <input
-            type="text"
-            className="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-600"
-            placeholder="/Users/you/work/backend"
-            value={repoPath}
-            onChange={e => setRepoPath(e.target.value)}
-            disabled={disabled || submitting}
-          />
+          <div className="flex gap-1">
+            <input
+              type="text"
+              className="flex-1 bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-600 font-mono"
+              placeholder="/Users/you/work/backend"
+              value={repoPath}
+              onChange={e => setRepoPath(e.target.value)}
+              disabled={disabled || submitting}
+            />
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              disabled={disabled || submitting}
+              className="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-sm whitespace-nowrap"
+              title="打开目录选择器"
+            >
+              📁 选择…
+            </button>
+          </div>
         </div>
         <button
           onClick={submit}
@@ -75,6 +88,13 @@ export function QuickForm({ disabled, submitting, onSubmit }: Props) {
           {submitting ? '分析中…' : '开始分析'}
         </button>
       </div>
+
+      <FolderPicker
+        open={pickerOpen}
+        initialPath={repoPath || undefined}
+        onClose={() => setPickerOpen(false)}
+        onPick={p => setRepoPath(p)}
+      />
 
       <button
         type="button"
