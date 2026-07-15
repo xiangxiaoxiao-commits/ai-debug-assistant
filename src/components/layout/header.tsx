@@ -19,7 +19,7 @@ export function Header({ modelConfigured, currentCaseTitle, onExport }: HeaderPr
       </div>
       {onExport && (
         <button onClick={onExport} className="text-xs px-2 py-1 rounded bg-slate-700 hover:bg-slate-600">
-          导出 JSON
+          导出 Case (JSON)
         </button>
       )}
     </header>

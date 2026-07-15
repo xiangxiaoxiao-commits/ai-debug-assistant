@@ -1,5 +1,6 @@
 'use client';
 import type { Case, Evidence, CaseIndexEntry, EvidenceType } from '@/domain/types';
+import type { ModelConfig, ModelCandidate } from '@/domain/model-config';
 
 async function j<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -27,5 +28,17 @@ export const api = {
     }).then(j<{ evidence: Evidence; case: Case }>),
   deleteEvidence: (caseId: string, evidenceId: string) =>
     fetch(`/api/cases/${caseId}/evidence/${evidenceId}`, { method: 'DELETE' }).then(j<{ case: Case }>),
-  exportCase: (id: string) => `/api/cases/${id}/export`
+  exportCase: (id: string) => `/api/cases/${id}/export`,
+  discoverConfig: () =>
+    fetch('/api/config/discover').then(j<{ candidates: ModelCandidate[]; saved: { provider: string; baseUrl: string; model: string; apiKeyMasked: string } | null }>),
+  revealCandidate: (candidateId: string) =>
+    fetch('/api/config/reveal', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ candidateId })
+    }).then(j<ModelConfig>),
+  saveModelConfig: (cfg: ModelConfig) =>
+    fetch('/api/config/model', {
+      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(cfg)
+    }).then(j<{ config: ModelConfig }>),
+  loadSavedModelConfig: () =>
+    fetch('/api/config/model').then(j<{ config: ModelConfig | null }>)
 };

@@ -104,7 +104,7 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="text-center text-slate-500 py-16 text-sm">
-              选择左侧一个 Case，或新建 Case 开始。
+              选择左侧一个 Case，或点「创建 Case」开始一次排障。
             </div>
           )
         }

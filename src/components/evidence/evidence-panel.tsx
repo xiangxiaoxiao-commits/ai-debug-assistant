@@ -32,11 +32,11 @@ export function EvidencePanel({ currentCase, evidence, onAdd, onDelete }: Props)
           onClick={() => setOpen(true)}>+ 添加证据</button>
       </div>
       <p className="text-[10px] text-slate-500">
-        L0 描述 → L1 工单/页面 → L2 API 证据 → L3 API + 代码 + Schema
+        L0 只有描述 · L1 加工单/页面 · L2 加 API 证据 · L3 加代码+Schema（可给出高置信度诊断）
       </p>
       {evidence.length === 0
         ? <div className="text-xs text-slate-500 py-4 text-center border border-dashed border-slate-800 rounded">
-            尚无证据。点「添加证据」开始收集。
+            暂无证据。点右上「添加证据」，从 cURL、日志或 SQL 开始。
           </div>
         : <div className="space-y-2">
             {evidence.map(e => <EvidenceCard key={e.id} evidence={e} onDelete={onDelete} />)}

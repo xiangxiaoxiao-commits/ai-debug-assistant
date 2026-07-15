@@ -10,7 +10,7 @@ interface Props {
 
 export function CaseList({ cases, activeId, onSelect, onDelete }: Props) {
   if (cases.length === 0) {
-    return <p className="text-xs text-slate-500">还没有 Case</p>;
+    return <p className="text-xs text-slate-500">暂无 Case，从上方新建一个开始</p>;
   }
   return (
     <ul className="space-y-1">
