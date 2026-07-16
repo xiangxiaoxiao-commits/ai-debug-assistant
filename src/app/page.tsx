@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CaseIndexEntry, Message, BugSummary, BugStatus, Trace } from '@/domain/types';
 import type { ModelCandidate } from '@/domain/model-config';
 import { api } from '@/client/api';
@@ -14,6 +14,7 @@ import { MemoryPanel } from '@/components/memory/memory-panel';
 import { QuickForm, type QuickFormValue } from '@/components/analyze/quick-form';
 import { ConfigBanner } from '@/components/analyze/config-banner';
 import { SettingsModal } from '@/components/settings/settings-modal';
+import { HintCard } from '@/components/analyze/hint-card';
 
 type StreamStatus = 'idle' | 'streaming' | 'done' | 'error';
 
@@ -35,6 +36,12 @@ export default function HomePage() {
   const [traces, setTraces] = useState<Trace[]>([]);
   // Maps assistantMessageId → traceId (populated from SSE + history load)
   const messageTraceMap = useRef<Map<string, string>>(new Map());
+
+  // traceId → Trace lookup map
+  const traceById = useMemo<Map<string, Trace>>(
+    () => new Map(traces.map(t => [t.id, t])),
+    [traces]
+  );
 
   const refreshDiscover = useCallback(async () => {
     try {
@@ -240,7 +247,7 @@ export default function HomePage() {
                 onNew={handleNewCase}
               />
             ) : (
-              <MemoryPanel />
+              <MemoryPanel onSwitchToBugs={() => setSidebarTab('bugs')} />
             )}
           </div>
         </aside>
@@ -276,6 +283,7 @@ export default function HomePage() {
                   streamingStatus={streamStatus}
                   streamingError={streamError}
                   messageTraceMap={messageTraceMap.current}
+                  traceById={traceById}
                   caseId={activeCaseId}
                 />
               </div>
@@ -291,6 +299,7 @@ export default function HomePage() {
             </>
           ) : (
             <div className="flex-1 overflow-y-auto p-4">
+              <HintCard />
               <div className="mb-4">
                 <h2 className="text-lg font-semibold mb-1">新建 Bug 排查</h2>
                 <p className="text-xs text-slate-400">描述问题，AI 会给出诊断。之后可以在对话里继续补充证据、追问细节。</p>

@@ -6,7 +6,11 @@ import { ProjectSelector } from './project-selector';
 import { ProjectIdentityCard } from './project-identity-card';
 import { MemoryList } from './memory-list';
 
-export function MemoryPanel() {
+interface Props {
+  onSwitchToBugs?: () => void;
+}
+
+export function MemoryPanel({ onSwitchToBugs }: Props) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -85,6 +89,23 @@ export function MemoryPanel() {
         loading={projectsLoading}
         onSelect={handleSelect}
       />
+
+      {!projectsLoading && projects.length === 0 && (
+        <div className="flex flex-col items-center gap-2 py-6 text-center">
+          <div className="text-xs text-slate-400">还没有项目档案</div>
+          <div className="text-[11px] text-slate-600 px-2 leading-relaxed">
+            新建 Bug 时会自动按代码仓库路径归属到项目，记忆就会积累起来
+          </div>
+          {onSwitchToBugs && (
+            <button
+              onClick={onSwitchToBugs}
+              className="mt-1 text-[11px] px-3 py-1 rounded border border-slate-700 text-slate-300 hover:text-slate-100 hover:border-slate-500"
+            >
+              新建 Bug
+            </button>
+          )}
+        </div>
+      )}
 
       {memoriesLoading && (
         <div className="text-xs text-slate-500">加载中…</div>

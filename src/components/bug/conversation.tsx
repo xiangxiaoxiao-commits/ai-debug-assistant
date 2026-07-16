@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef } from 'react';
-import type { Message } from '@/domain/types';
+import type { Message, Trace } from '@/domain/types';
 import { Markdown } from '@/lib/markdown';
 import { TraceTimeline } from '@/components/trace/trace-timeline';
 
@@ -11,9 +11,10 @@ interface Props {
   streamingError: string | null;
   caseId?: string;
   messageTraceMap?: Map<string, string>;
+  traceById?: Map<string, Trace>;
 }
 
-export function Conversation({ messages, streamingText, streamingStatus, streamingError, caseId, messageTraceMap }: Props) {
+export function Conversation({ messages, streamingText, streamingStatus, streamingError, caseId, messageTraceMap, traceById }: Props) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -22,14 +23,18 @@ export function Conversation({ messages, streamingText, streamingStatus, streami
 
   return (
     <div className="space-y-3">
-      {messages.filter(m => m.role !== 'system-summary').map(m => (
-        <Bubble
-          key={m.id}
-          message={m}
-          caseId={caseId}
-          traceId={m.role === 'assistant' ? (messageTraceMap?.get(m.id) ?? null) : null}
-        />
-      ))}
+      {messages.filter(m => m.role !== 'system-summary').map(m => {
+        const traceId = m.role === 'assistant' ? (messageTraceMap?.get(m.id) ?? null) : null;
+        const trace = traceId ? (traceById?.get(traceId) ?? null) : null;
+        return (
+          <Bubble
+            key={m.id}
+            message={m}
+            caseId={caseId}
+            trace={m.role === 'assistant' && traceId ? trace : undefined}
+          />
+        );
+      })}
 
       {streamingStatus === 'streaming' && (
         <div className="rounded-lg bg-slate-900/60 border border-slate-800 p-3">
@@ -53,7 +58,7 @@ export function Conversation({ messages, streamingText, streamingStatus, streami
   );
 }
 
-function Bubble({ message, caseId, traceId }: { message: Message; caseId?: string; traceId: string | null }) {
+function Bubble({ message, caseId, trace }: { message: Message; caseId?: string; trace?: Trace | null }) {
   const isUser = message.role === 'user';
   return (
     <div className={`rounded-lg border p-3 ${
@@ -84,8 +89,8 @@ function Bubble({ message, caseId, traceId }: { message: Message; caseId?: strin
       ) : (
         <Markdown source={message.content} />
       )}
-      {!isUser && caseId && (
-        <TraceTimeline caseId={caseId} traceId={traceId} />
+      {!isUser && caseId && trace !== undefined && (
+        <TraceTimeline trace={trace} />
       )}
     </div>
   );

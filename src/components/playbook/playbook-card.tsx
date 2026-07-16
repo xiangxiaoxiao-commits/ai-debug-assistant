@@ -222,6 +222,19 @@ export function PlaybookCard({ caseId }: Props) {
     }
   };
 
+  const handleCreateEmpty = async () => {
+    setSaving(true);
+    try {
+      const r = await api.updatePlaybook(caseId, []);
+      setPlaybook(r.playbook);
+      setCollapsed(false);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const sourceLabel: Record<string, string> = { auto: 'AI 自动生成', user: '手动编辑', template: '模板' };
   const steps = playbook?.steps ?? [];
 
@@ -256,6 +269,20 @@ export function PlaybookCard({ caseId }: Props) {
             <div className="text-xs text-rose-400 flex items-center gap-1">
               <span>⚠ {error}</span>
               <button onClick={() => setError(null)} className="ml-auto text-slate-500 hover:text-slate-300">×</button>
+            </div>
+          )}
+
+          {!loading && !error && playbook === null && (
+            <div className="flex flex-col items-center gap-2 py-3 text-center">
+              <div className="text-xs text-slate-400">还没有 Playbook</div>
+              <div className="text-[11px] text-slate-600">AI 会在分析后自动生成，也可以手动创建</div>
+              <button
+                onClick={handleCreateEmpty}
+                disabled={saving}
+                className="mt-1 text-[11px] px-3 py-1 rounded border border-slate-700 text-slate-300 hover:text-slate-100 hover:border-slate-500 disabled:opacity-40"
+              >
+                {saving ? '创建中…' : '+ 从空白创建'}
+              </button>
             </div>
           )}
 
