@@ -86,6 +86,9 @@ export interface Case {
   modelSnapshot?: { provider: string; baseUrl: string; model: string };
   messages?: Message[];
   summary?: BugSummary;
+  featureId?: string;
+  relatedCaseIds?: string[];
+  lessons?: Lesson;
 }
 
 export interface Evidence {
@@ -109,4 +112,38 @@ export interface CaseIndexEntry {
   status: CaseStatus;
   bugStatus?: BugStatus;
   headline?: string;
+  featureId?: string;
+  featureName?: string;
+}
+
+export interface VerifiedFix {
+  symptomPattern: string;
+  rootCause: string;
+  fix: string;
+  sourceCaseIds: string[];
+}
+
+export interface FeatureKnowledge {
+  commonRootCauses: string[];
+  verifiedFixes: VerifiedFix[];
+  updatedAt: string;
+  sourceCaseCount: number;
+}
+
+export interface Feature {
+  id: string;
+  name: string;
+  aliases?: string[];
+  createdAt: string;
+  updatedAt: string;
+  bugCount: number;
+  resolvedCount: number;
+  knowledge?: FeatureKnowledge;
+}
+
+export interface Lesson {
+  symptomPattern: string;
+  rootCause: string;
+  fix: string;
+  extractedAt: string;
 }

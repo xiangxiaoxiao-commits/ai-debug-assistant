@@ -72,6 +72,13 @@ export const caseMetaSchema = z.object({
   repoPath: z.string().optional()
 });
 
+export const lessonSchema = z.object({
+  symptomPattern: z.string(),
+  rootCause: z.string(),
+  fix: z.string(),
+  extractedAt: z.string()
+});
+
 export const caseSchema = z.object({
   id: z.string().uuid(),
   createdAt: z.string(),
@@ -92,7 +99,10 @@ export const caseSchema = z.object({
     provider: z.string(), baseUrl: z.string(), model: z.string()
   }).optional(),
   messages: z.array(messageSchema).optional(),
-  summary: bugSummarySchema.optional()
+  summary: bugSummarySchema.optional(),
+  featureId: z.string().uuid().optional(),
+  relatedCaseIds: z.array(z.string().uuid()).optional(),
+  lessons: lessonSchema.optional()
 });
 
 export const evidenceSchema = z.object({
@@ -137,5 +147,40 @@ export const caseIndexEntrySchema = z.object({
   repoPath: z.string().optional(),
   status: caseStatusSchema,
   bugStatus: bugStatusSchema.optional(),
-  headline: z.string().optional()
+  headline: z.string().optional(),
+  featureId: z.string().uuid().optional(),
+  featureName: z.string().optional()
+});
+
+export const verifiedFixSchema = z.object({
+  symptomPattern: z.string(),
+  rootCause: z.string(),
+  fix: z.string(),
+  sourceCaseIds: z.array(z.string())
+});
+
+export const featureKnowledgeSchema = z.object({
+  commonRootCauses: z.array(z.string()),
+  verifiedFixes: z.array(verifiedFixSchema),
+  updatedAt: z.string(),
+  sourceCaseCount: z.number().nonnegative()
+});
+
+export const featureSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1),
+  aliases: z.array(z.string()).optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  bugCount: z.number().nonnegative(),
+  resolvedCount: z.number().nonnegative(),
+  knowledge: featureKnowledgeSchema.optional()
+});
+
+export const featureIndexEntrySchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  bugCount: z.number().nonnegative(),
+  resolvedCount: z.number().nonnegative(),
+  updatedAt: z.string()
 });

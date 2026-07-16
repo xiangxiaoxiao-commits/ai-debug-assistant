@@ -30,13 +30,14 @@ function toEntry(c: Case): CaseIndexEntry {
     repoPath: c.meta?.repoPath,
     status: c.status,
     bugStatus: c.summary?.status,
-    headline: c.summary?.headline
+    headline: c.summary?.headline,
+    featureId: c.featureId
   };
 }
 
-export async function upsertIndexEntry(c: Case): Promise<void> {
+export async function upsertIndexEntry(c: Case, featureName?: string): Promise<void> {
   const cur = await readIndex();
-  const entry = toEntry(c);
+  const entry = { ...toEntry(c), featureName };
   const next = cur.filter(e => e.id !== c.id);
   next.push(entry);
   next.sort((a, b) => b.createdAt.localeCompare(a.createdAt));

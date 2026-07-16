@@ -34,3 +34,15 @@ export function indexFile(): string {
 export function configFile(): string {
   return path.join(getRoot(), 'config.json');
 }
+
+export function featuresDir(): string {
+  return path.join(getRoot(), 'features');
+}
+
+export function featureFile(featureId: string): string {
+  return path.join(featuresDir(), `${featureId}.json`);
+}
+
+export function featuresIndexFile(): string {
+  return path.join(featuresDir(), 'index.json');
+}

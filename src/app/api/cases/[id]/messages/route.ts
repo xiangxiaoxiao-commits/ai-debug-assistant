@@ -8,7 +8,8 @@ import { quickIngest } from '@/server/quick-ingest';
 import { buildConversationPrompt } from '@/server/prompt-builder';
 import { streamLlm } from '@/server/llm-client';
 import { extractSummary } from '@/server/summary-extractor';
-import type { Case, Evidence } from '@/domain/types';
+import { getFeature } from '@/server/feature-store';
+import type { Case, Evidence, FeatureKnowledge } from '@/domain/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -72,13 +73,46 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   // Re-read case to get latest messages (including user msg)
   const freshCase = await getCase(id);
+
+  // Load feature context for prompt enrichment
+  let featureKnowledge: FeatureKnowledge | undefined;
+  let relatedCasesForPrompt: { headline?: string; rootCause?: string; fix?: string }[] = [];
+  let featureName: string | undefined;
+
+  if (freshCase.featureId) {
+    try {
+      const feat = await getFeature(freshCase.featureId);
+      featureKnowledge = feat.knowledge;
+      featureName = feat.name;
+    } catch {
+      // non-fatal
+    }
+  }
+
+  if (freshCase.relatedCaseIds && freshCase.relatedCaseIds.length > 0) {
+    for (const rcId of freshCase.relatedCaseIds) {
+      try {
+        const rc = await getCase(rcId);
+        relatedCasesForPrompt.push({
+          headline: rc.summary?.headline,
+          rootCause: rc.summary?.rootCause,
+          fix: rc.summary?.fixApproach
+        });
+      } catch {
+        // skip missing
+      }
+    }
+  }
+
   const opts = buildConversationPrompt({
     problem: freshCase.problem,
     meta: freshCase.meta,
     evidences,
     code,
     messages: freshCase.messages ?? [],
-    currentSummary: freshCase.summary
+    currentSummary: freshCase.summary,
+    featureKnowledge,
+    relatedCases: relatedCasesForPrompt
   });
 
   const encoder = new TextEncoder();
@@ -88,6 +122,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
 
       try {
+        send({
+          type: 'context',
+          featureName,
+          featureKnowledgeSize: featureKnowledge
+            ? featureKnowledge.commonRootCauses.length + featureKnowledge.verifiedFixes.length
+            : 0,
+          relatedCases: relatedCasesForPrompt.map(r => r.headline).filter(Boolean)
+        });
+
         send({
           type: 'meta',
           evidences: evidences.length,

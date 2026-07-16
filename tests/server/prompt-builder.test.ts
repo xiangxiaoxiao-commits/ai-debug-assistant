@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildAnalyzePrompt, buildConversationPrompt } from '@/server/prompt-builder';
-import type { CaseProblem, CaseMeta, Evidence, Message, BugSummary } from '@/domain/types';
+import type { CaseProblem, CaseMeta, Evidence, Message, BugSummary, FeatureKnowledge } from '@/domain/types';
 
 function makeProblem(overrides?: Partial<CaseProblem>): CaseProblem {
   return {
@@ -264,5 +264,77 @@ describe('buildConversationPrompt', () => {
       messages: []
     });
     expect(opts.userPrompt).toContain('当前任务');
+  });
+});
+
+describe('buildConversationPrompt — feature knowledge injection', () => {
+  it('featureKnowledge 存在时注入「已知模式」区块', () => {
+    const featureKnowledge: FeatureKnowledge = {
+      commonRootCauses: ['字典未加载', '连接池耗尽'],
+      verifiedFixes: [
+        {
+          symptomPattern: '字段显示数字',
+          rootCause: '字典未加载',
+          fix: '预加载字典',
+          sourceCaseIds: ['aaa']
+        }
+      ],
+      updatedAt: new Date().toISOString(),
+      sourceCaseCount: 2
+    };
+    const opts = buildConversationPrompt({
+      problem: makeProblem(),
+      evidences: [],
+      messages: [],
+      featureKnowledge
+    });
+    expect(opts.userPrompt).toContain('该功能的已知模式');
+    expect(opts.userPrompt).toContain('字典未加载');
+    expect(opts.userPrompt).toContain('预加载字典');
+  });
+
+  it('relatedCases 存在时注入「相似历史 bug」区块', () => {
+    const relatedCases = [
+      { headline: '审批 NPE', rootCause: '字典未加载', fix: '预加载字典' }
+    ];
+    const opts = buildConversationPrompt({
+      problem: makeProblem(),
+      evidences: [],
+      messages: [],
+      relatedCases
+    });
+    expect(opts.userPrompt).toContain('相似历史 bug');
+    expect(opts.userPrompt).toContain('审批 NPE');
+  });
+
+  it('注入内容超过 4000 字时截断', () => {
+    const featureKnowledge: FeatureKnowledge = {
+      commonRootCauses: Array.from({ length: 50 }, (_, i) => `根因${i}：${'x'.repeat(100)}`),
+      verifiedFixes: Array.from({ length: 20 }, (_, i) => ({
+        symptomPattern: `症状${i}：${'y'.repeat(100)}`,
+        rootCause: `根因${i}`,
+        fix: `修复${i}`,
+        sourceCaseIds: []
+      })),
+      updatedAt: new Date().toISOString(),
+      sourceCaseCount: 70
+    };
+    const opts = buildConversationPrompt({
+      problem: makeProblem(),
+      evidences: [],
+      messages: [],
+      featureKnowledge
+    });
+    // Total should stay well-bounded
+    expect(opts.userPrompt.length + opts.systemPrompt.length).toBeLessThan(50_000);
+  });
+
+  it('featureKnowledge 未提供时不出现「已知模式」区块', () => {
+    const opts = buildConversationPrompt({
+      problem: makeProblem(),
+      evidences: [],
+      messages: []
+    });
+    expect(opts.userPrompt).not.toContain('该功能的已知模式');
   });
 });

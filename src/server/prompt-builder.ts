@@ -1,4 +1,4 @@
-import type { CaseProblem, CaseMeta, Evidence, Message, BugSummary } from '@/domain/types';
+import type { CaseProblem, CaseMeta, Evidence, Message, BugSummary, FeatureKnowledge } from '@/domain/types';
 import type { LlmCallOptions } from './llm-client';
 import type { CodeReadResult } from './code-reader';
 
@@ -186,6 +186,36 @@ function buildHistorySection(messages: Message[], charBudget: number): string {
   return parts.join('\n\n');
 }
 
+function buildFeatureInjection(
+  featureKnowledge?: FeatureKnowledge,
+  relatedCases?: { headline?: string; rootCause?: string; fix?: string }[]
+): string {
+  const MAX_INJECTION = 4000;
+  const parts: string[] = [];
+
+  if (featureKnowledge && (featureKnowledge.commonRootCauses.length > 0 || featureKnowledge.verifiedFixes.length > 0)) {
+    const causesText = featureKnowledge.commonRootCauses.map(c => `- ${c}`).join('\n');
+    const fixesText = featureKnowledge.verifiedFixes
+      .map(v => `- 症状：${v.symptomPattern} → 根因：${v.rootCause} → 修复：${v.fix}`)
+      .join('\n');
+    parts.push(`## 该功能的已知模式\n常见根因：\n${causesText}\n\n已验证的修复模式：\n${fixesText}\n\n（这些来自本模块的历史 bug。如果新 bug 匹配某个模式，直接引用；否则说明为什么不适用。）`);
+  }
+
+  if (relatedCases && relatedCases.length > 0) {
+    const lines = relatedCases
+      .filter(r => r.headline)
+      .map(r => `- ${r.headline}：${r.rootCause ?? '未知根因'} → ${r.fix ?? '未知修复'}`)
+      .join('\n');
+    if (lines) parts.push(`## 相似历史 bug（供参考）\n${lines}`);
+  }
+
+  const combined = parts.join('\n\n');
+  if (combined.length > MAX_INJECTION) {
+    return combined.slice(0, MAX_INJECTION) + '\n\n（已截断）';
+  }
+  return combined;
+}
+
 export function buildConversationPrompt(input: {
   problem: CaseProblem;
   meta?: CaseMeta;
@@ -193,8 +223,10 @@ export function buildConversationPrompt(input: {
   code?: CodeReadResult;
   messages: Message[];
   currentSummary?: BugSummary;
+  featureKnowledge?: FeatureKnowledge;
+  relatedCases?: { headline?: string; rootCause?: string; fix?: string }[];
 }): LlmCallOptions {
-  const { problem, meta, evidences, code, messages, currentSummary } = input;
+  const { problem, meta, evidences, code, messages, currentSummary, featureKnowledge, relatedCases } = input;
 
   const summarySection = currentSummary
     ? `## 当前 Bug 摘要\n${renderBugSummary(currentSummary)}`
@@ -213,9 +245,12 @@ export function buildConversationPrompt(input: {
 
   const taskPart = `## 当前任务\n基于以上，回答用户的最新消息。保持结构化输出（一句话结论 / 已确认事实 / 根因假设 / 建议验证 / 建议修复 / 还需要什么信息）。`;
 
+  const featureInjection = buildFeatureInjection(featureKnowledge, relatedCases);
+
   // Calculate budget for evidence + history
   const fixedChars =
     CONVERSATION_SYSTEM_PROMPT.length +
+    featureInjection.length +
     summarySection.length +
     problemSection.length +
     codePart.length +
@@ -231,7 +266,9 @@ export function buildConversationPrompt(input: {
   const historyText = buildHistorySection(messages, historyBudget);
   const historySection = historyText ? `## 对话历史\n${historyText}` : '';
 
-  const parts = [summarySection, problemSection, evidenceSection, codePart];
+  const parts = featureInjection
+    ? [featureInjection, summarySection, problemSection, evidenceSection, codePart]
+    : [summarySection, problemSection, evidenceSection, codePart];
   if (historySection) parts.push(historySection);
   parts.push(taskPart);
 
