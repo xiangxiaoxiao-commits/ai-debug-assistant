@@ -147,6 +147,7 @@ export interface Case {
   lessons?: Lesson;
   playbook?: Playbook;
   traceIds?: string[];
+  projectId?: string;
 }
 
 export interface Evidence {

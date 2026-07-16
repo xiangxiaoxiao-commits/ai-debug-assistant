@@ -155,7 +155,8 @@ export const caseSchema = z.object({
   relatedCaseIds: z.array(z.string().uuid()).optional(),
   lessons: lessonSchema.optional(),
   playbook: playbookSchema.optional(),
-  traceIds: z.array(z.string()).optional()
+  traceIds: z.array(z.string()).optional(),
+  projectId: z.string().uuid().optional()
 });
 
 export const evidenceSchema = z.object({
