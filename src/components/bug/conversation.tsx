@@ -2,15 +2,18 @@
 import { useEffect, useRef } from 'react';
 import type { Message } from '@/domain/types';
 import { Markdown } from '@/lib/markdown';
+import { TraceTimeline } from '@/components/trace/trace-timeline';
 
 interface Props {
   messages: Message[];
   streamingText: string;
   streamingStatus: 'idle' | 'streaming' | 'done' | 'error';
   streamingError: string | null;
+  caseId?: string;
+  messageTraceMap?: Map<string, string>;
 }
 
-export function Conversation({ messages, streamingText, streamingStatus, streamingError }: Props) {
+export function Conversation({ messages, streamingText, streamingStatus, streamingError, caseId, messageTraceMap }: Props) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -20,7 +23,12 @@ export function Conversation({ messages, streamingText, streamingStatus, streami
   return (
     <div className="space-y-3">
       {messages.filter(m => m.role !== 'system-summary').map(m => (
-        <Bubble key={m.id} message={m} />
+        <Bubble
+          key={m.id}
+          message={m}
+          caseId={caseId}
+          traceId={m.role === 'assistant' ? (messageTraceMap?.get(m.id) ?? null) : null}
+        />
       ))}
 
       {streamingStatus === 'streaming' && (
@@ -45,7 +53,7 @@ export function Conversation({ messages, streamingText, streamingStatus, streami
   );
 }
 
-function Bubble({ message }: { message: Message }) {
+function Bubble({ message, caseId, traceId }: { message: Message; caseId?: string; traceId: string | null }) {
   const isUser = message.role === 'user';
   return (
     <div className={`rounded-lg border p-3 ${
@@ -75,6 +83,9 @@ function Bubble({ message }: { message: Message }) {
         <div className="text-sm text-slate-200 whitespace-pre-wrap">{message.content}</div>
       ) : (
         <Markdown source={message.content} />
+      )}
+      {!isUser && caseId && (
+        <TraceTimeline caseId={caseId} traceId={traceId} />
       )}
     </div>
   );

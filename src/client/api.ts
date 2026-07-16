@@ -1,6 +1,7 @@
 'use client';
-import type { Case, Evidence, CaseIndexEntry, EvidenceType, Message, BugSummary, BugStatus } from '@/domain/types';
+import type { Case, Evidence, CaseIndexEntry, EvidenceType, Message, BugSummary, BugStatus, Trace, Playbook, PlaybookStep } from '@/domain/types';
 import type { ModelConfig, ModelCandidate } from '@/domain/model-config';
+import type { Project, ProjectIdentity, MemoryEntry, MemoryKind } from '@/domain/memory';
 
 async function j<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -71,12 +72,55 @@ export const api = {
         try { yield JSON.parse(line.slice(6)) as MessageChunk; } catch { /* skip malformed */ }
       }
     }
-  }
+  },
+
+  // ─── Trace ────────────────────────────────────────────────────────────────
+  getCaseTraces: (caseId: string) =>
+    fetch(`/api/cases/${caseId}/traces`).then(j<{ traces: Trace[] }>),
+  getCaseTrace: (caseId: string, traceId: string) =>
+    fetch(`/api/cases/${caseId}/traces/${traceId}`).then(j<{ trace: Trace }>),
+
+  // ─── Playbook ─────────────────────────────────────────────────────────────
+  getPlaybook: (caseId: string) =>
+    fetch(`/api/cases/${caseId}/playbook`).then(j<{ playbook: Playbook | null }>),
+  updatePlaybook: (caseId: string, steps: PlaybookStep[]) =>
+    fetch(`/api/cases/${caseId}/playbook`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ steps })
+    }).then(j<{ playbook: Playbook }>),
+  patchPlaybookStep: (caseId: string, stepId: string, patch: { status?: PlaybookStep['status']; notes?: string; title?: string; hint?: string }) =>
+    fetch(`/api/cases/${caseId}/playbook`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ stepId, patch })
+    }).then(j<{ playbook: Playbook }>),
+
+  // ─── Memory / Projects ────────────────────────────────────────────────────
+  listMemoryProjects: () =>
+    fetch('/api/memory/projects').then(j<{ projects: Project[] }>),
+  getMemoryProject: (id: string) =>
+    fetch(`/api/memory/projects/${id}`).then(j<{ project: Project }>),
+  updateProjectIdentity: (id: string, identity: Partial<ProjectIdentity>) =>
+    fetch(`/api/memory/projects/${id}`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ identity })
+    }).then(j<{ project: Project }>),
+  listMemories: (projectId: string, opts?: { kinds?: MemoryKind[]; tags?: string[] }) => {
+    const params = new URLSearchParams();
+    if (opts?.kinds?.length) params.set('kinds', opts.kinds.join(','));
+    if (opts?.tags?.length) params.set('tags', opts.tags.join(','));
+    const qs = params.toString();
+    return fetch(`/api/memory/projects/${projectId}/memories${qs ? `?${qs}` : ''}`).then(j<{ memories: MemoryEntry[] }>);
+  },
+  updateMemory: (projectId: string, memoryId: string, patch: { content?: string; tags?: string[]; strength?: number }) =>
+    fetch(`/api/memory/projects/${projectId}/memories/${memoryId}`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(patch)
+    }).then(j<{ memory: MemoryEntry }>),
+  forgetMemory: (projectId: string, memoryId: string) =>
+    fetch(`/api/memory/projects/${projectId}/memories/${memoryId}`, { method: 'DELETE' }).then(j<{ deleted: string }>)
 };
 
 export type MessageChunk =
   | { type: 'meta'; evidences: number; codeSnippets: number; promptChars: number; userMessageId: string }
   | { type: 'text'; text: string }
   | { type: 'summary'; summary: BugSummary }
+  | { type: 'trace-step'; step: { kind: string; label: string; status: string; durationMs?: number } }
+  | { type: 'trace-done'; traceId: string; assistantMessageId?: string }
   | { type: 'error'; message: string }
   | { type: 'done'; assistantMessageId?: string; inputTokens?: number; outputTokens?: number };

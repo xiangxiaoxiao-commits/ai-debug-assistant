@@ -1,13 +1,16 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
-import type { CaseIndexEntry, Message, BugSummary, BugStatus } from '@/domain/types';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { CaseIndexEntry, Message, BugSummary, BugStatus, Trace } from '@/domain/types';
 import type { ModelCandidate } from '@/domain/model-config';
 import { api } from '@/client/api';
 import { Header } from '@/components/layout/header';
+import { SidebarTabs, type SidebarTab } from '@/components/layout/sidebar-tabs';
 import { BugList } from '@/components/bug/bug-list';
 import { SummaryCard } from '@/components/bug/summary-card';
 import { Conversation } from '@/components/bug/conversation';
 import { Composer } from '@/components/bug/composer';
+import { PlaybookCard } from '@/components/playbook/playbook-card';
+import { MemoryPanel } from '@/components/memory/memory-panel';
 import { QuickForm, type QuickFormValue } from '@/components/analyze/quick-form';
 import { ConfigBanner } from '@/components/analyze/config-banner';
 import { SettingsModal } from '@/components/settings/settings-modal';
@@ -28,6 +31,10 @@ export default function HomePage() {
   const [submitting, setSubmitting] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>('bugs');
+  const [traces, setTraces] = useState<Trace[]>([]);
+  // Maps assistantMessageId → traceId (populated from SSE + history load)
+  const messageTraceMap = useRef<Map<string, string>>(new Map());
 
   const refreshDiscover = useCallback(async () => {
     try {
@@ -46,6 +53,28 @@ export default function HomePage() {
 
   useEffect(() => { refreshDiscover(); refreshCases(); }, [refreshDiscover, refreshCases]);
 
+  // Load traces for active case and build message→trace map
+  const loadTraces = useCallback(async (caseId: string, msgs: Message[]) => {
+    try {
+      const r = await api.getCaseTraces(caseId);
+      setTraces(r.traces);
+      // Build map: trace.triggerRef is the user message id;
+      // we find the assistant message that follows each user message
+      const assistantMsgs = msgs.filter(m => m.role === 'assistant');
+      const userMsgs = msgs.filter(m => m.role === 'user');
+      const map = new Map<string, string>();
+      for (const trace of r.traces) {
+        if (!trace.triggerRef) continue;
+        // Find the index of user msg with this id
+        const userIdx = userMsgs.findIndex(m => m.id === trace.triggerRef);
+        if (userIdx !== -1 && assistantMsgs[userIdx]) {
+          map.set(assistantMsgs[userIdx].id, trace.id);
+        }
+      }
+      messageTraceMap.current = map;
+    } catch { /* non-blocking */ }
+  }, []);
+
   const loadCase = useCallback(async (id: string) => {
     try {
       const [c, m] = await Promise.all([api.getCase(id), api.getMessages(id)]);
@@ -56,8 +85,9 @@ export default function HomePage() {
       setStreamStatus('idle');
       setStreamingText('');
       setStreamError(null);
+      await loadTraces(id, m.messages);
     } catch (e) { setGlobalError((e as Error).message); }
-  }, []);
+  }, [loadTraces]);
 
   const streamMessage = useCallback(async (caseId: string, text: string) => {
     setStreamStatus('streaming');
@@ -65,25 +95,37 @@ export default function HomePage() {
     setStreamError(null);
 
     let acc = '';
+    let pendingUserMsgId: string | null = null;
     try {
       for await (const chunk of api.sendMessage(caseId, text)) {
-        if (chunk.type === 'text') {
+        if (chunk.type === 'meta') {
+          pendingUserMsgId = chunk.userMessageId;
+        } else if (chunk.type === 'text') {
           acc += chunk.text;
           setStreamingText(acc);
         } else if (chunk.type === 'summary') {
           setSummary(chunk.summary);
+        } else if (chunk.type === 'trace-done') {
+          // Store in ref so we can wire it after messages load
+          if (chunk.assistantMessageId && chunk.traceId) {
+            messageTraceMap.current.set(chunk.assistantMessageId, chunk.traceId);
+          } else if (pendingUserMsgId && chunk.traceId) {
+            // We'll wire after load based on userMsgId
+            // Store temporarily with user msg id as key
+            messageTraceMap.current.set(`__user_${pendingUserMsgId}`, chunk.traceId);
+          }
         } else if (chunk.type === 'error') {
           setStreamError(chunk.message);
           setStreamStatus('error');
           return;
         } else if (chunk.type === 'done') {
           setStreamStatus('done');
-          // Reload messages to get the persisted user + assistant with ids
           const m = await api.getMessages(caseId);
           setMessages(m.messages);
           setSummary(m.summary);
           setStreamingText('');
           setStreamStatus('idle');
+          await loadTraces(caseId, m.messages);
           await refreshCases();
           return;
         }
@@ -92,7 +134,7 @@ export default function HomePage() {
       setStreamError((e as Error).message);
       setStreamStatus('error');
     }
-  }, [refreshCases]);
+  }, [refreshCases, loadTraces]);
 
   const handleFirstMessage = async (v: QuickFormValue) => {
     if (!modelConfigured) return;
@@ -116,6 +158,8 @@ export default function HomePage() {
       setActiveRepoPath(v.repoPath || '');
       setMessages([]);
       setSummary(null);
+      setTraces([]);
+      messageTraceMap.current = new Map();
       await refreshCases();
       await streamMessage(created.case.id, v.problem);
     } catch (e) {
@@ -129,12 +173,6 @@ export default function HomePage() {
     if (!activeCaseId) return;
     setSubmitting(true);
     try {
-      // if repoPath changed, persist to case meta first
-      const currentCase = await api.getCase(activeCaseId);
-      if (activeRepoPath !== (currentCase.case.meta?.repoPath ?? '')) {
-        // No PATCH for meta yet? Use existing PATCH /api/cases/:id if present.
-        // Safe fallback: skip persist; user can re-select repo next round.
-      }
       await streamMessage(activeCaseId, text);
     } finally {
       setSubmitting(false);
@@ -160,6 +198,8 @@ export default function HomePage() {
         setMessages([]);
         setSummary(null);
         setActiveRepoPath('');
+        setTraces([]);
+        messageTraceMap.current = new Map();
       }
       await refreshCases();
     } catch (e) {
@@ -175,6 +215,8 @@ export default function HomePage() {
     setStreamStatus('idle');
     setStreamingText('');
     setStreamError(null);
+    setTraces([]);
+    messageTraceMap.current = new Map();
   };
 
   return (
@@ -186,14 +228,21 @@ export default function HomePage() {
       />
 
       <div className="grid grid-cols-[280px_1fr] gap-3 p-3 h-[calc(100vh-49px)] overflow-hidden">
-        <aside className="rounded border border-slate-800 bg-slate-900/40 p-3">
-          <BugList
-            cases={cases}
-            activeId={activeCaseId ?? undefined}
-            onSelect={loadCase}
-            onDelete={handleDeleteCase}
-            onNew={handleNewCase}
-          />
+        <aside className="rounded border border-slate-800 bg-slate-900/40 p-3 overflow-hidden flex flex-col">
+          <SidebarTabs active={sidebarTab} onChange={setSidebarTab} />
+          <div className="flex-1 overflow-y-auto min-h-0">
+            {sidebarTab === 'bugs' ? (
+              <BugList
+                cases={cases}
+                activeId={activeCaseId ?? undefined}
+                onSelect={loadCase}
+                onDelete={handleDeleteCase}
+                onNew={handleNewCase}
+              />
+            ) : (
+              <MemoryPanel />
+            )}
+          </div>
         </aside>
 
         <main className="rounded border border-slate-800 bg-slate-900/40 flex flex-col overflow-hidden">
@@ -220,11 +269,14 @@ export default function HomePage() {
                 {summary && (
                   <SummaryCard summary={summary} onStatusChange={handleStatusChange} />
                 )}
+                <PlaybookCard caseId={activeCaseId} />
                 <Conversation
                   messages={messages}
                   streamingText={streamingText}
                   streamingStatus={streamStatus}
                   streamingError={streamError}
+                  messageTraceMap={messageTraceMap.current}
+                  caseId={activeCaseId}
                 />
               </div>
               <div className="px-4 pb-4">
