@@ -7,6 +7,57 @@ export const caseStatusSchema = z.enum(CASE_STATUSES);
 export const evidenceTypeSchema = z.enum(EVIDENCE_TYPES);
 export const evidenceLevelSchema = z.enum(EVIDENCE_LEVELS);
 
+// ─── Trace schemas ────────────────────────────────────────────────────────────
+
+export const traceStepKindSchema = z.enum([
+  'classify-feature', 'find-similar', 'load-knowledge', 'quick-ingest',
+  'read-code', 'build-prompt', 'llm-call', 'extract-summary',
+  'extract-lesson', 'refresh-knowledge', 'update-playbook'
+]);
+
+export const traceStepSchema = z.object({
+  id: z.string(),
+  kind: traceStepKindSchema,
+  label: z.string(),
+  startedAt: z.string(),
+  endedAt: z.string(),
+  durationMs: z.number().nonnegative(),
+  status: z.enum(['ok', 'skipped', 'failed']),
+  detail: z.string().optional(),
+  error: z.string().optional(),
+  meta: z.record(z.unknown()).optional()
+});
+
+export const traceSchema = z.object({
+  id: z.string(),
+  caseId: z.string(),
+  triggeredBy: z.enum(['create-case', 'send-message', 'change-status', 'refresh-knowledge']),
+  triggerRef: z.string().optional(),
+  createdAt: z.string(),
+  totalMs: z.number().nonnegative(),
+  steps: z.array(traceStepSchema)
+});
+
+// ─── Playbook schemas ─────────────────────────────────────────────────────────
+
+export const playbookStepSchema = z.object({
+  id: z.string(),
+  order: z.number().int().nonnegative(),
+  title: z.string(),
+  hint: z.string().optional(),
+  status: z.enum(['todo', 'doing', 'done', 'skipped']),
+  evidenceRefs: z.array(z.string()).optional(),
+  notes: z.string().optional(),
+  updatedAt: z.string(),
+  updatedBy: z.enum(['user', 'llm'])
+});
+
+export const playbookSchema = z.object({
+  steps: z.array(playbookStepSchema),
+  source: z.enum(['auto', 'user', 'template']),
+  updatedAt: z.string()
+});
+
 export const bugStatusSchema = z.enum(['open', 'investigating', 'resolved', 'wont-fix']);
 
 export const bugSummarySchema = z.object({
@@ -102,7 +153,9 @@ export const caseSchema = z.object({
   summary: bugSummarySchema.optional(),
   featureId: z.string().uuid().optional(),
   relatedCaseIds: z.array(z.string().uuid()).optional(),
-  lessons: lessonSchema.optional()
+  lessons: lessonSchema.optional(),
+  playbook: playbookSchema.optional(),
+  traceIds: z.array(z.string()).optional()
 });
 
 export const evidenceSchema = z.object({

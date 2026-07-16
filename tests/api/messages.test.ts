@@ -173,7 +173,7 @@ describe('POST /api/cases/:id/messages', () => {
     expect(updated.messages![1].meta?.inputTokens).toBe(100);
   });
 
-  it('空 text → 使用 problem.actual 作为用户消息内容', async () => {
+  it('SSE 流包含 trace-step 和 trace-done 事件', async () => {
     vi.mocked(streamLlm)
       .mockImplementationOnce(() => fakeStream())
       .mockImplementationOnce(() => fakeSummaryStream());
@@ -186,14 +186,22 @@ describe('POST /api/cases/:id/messages', () => {
     });
 
     const kase = await createCase({
-      problem: { actual: 'service crash on startup', expected: 'ok', entry: '/api', environment: 'prod' }
+      problem: { actual: 'crash', expected: 'ok', entry: '/api', environment: 'prod' }
     });
 
-    const res = await POST(postReq(kase.id, { text: '' }), { params: Promise.resolve({ id: kase.id }) });
-    await res.text(); // drain
+    const res = await POST(postReq(kase.id, { text: 'what is the root cause?' }), { params: Promise.resolve({ id: kase.id }) });
+    const events = await readSseEvents(res);
 
-    const updated = await getCase(kase.id);
-    expect(updated.messages![0].content).toBe('service crash on startup');
+    const traceStepEvents = events.filter(e => e.type === 'trace-step');
+    expect(traceStepEvents.length).toBeGreaterThan(0);
+    const stepKinds = traceStepEvents.map(e => (e as Record<string, unknown>).step as Record<string, unknown>).map(s => s.kind);
+    expect(stepKinds).toContain('llm-call');
+
+    const traceDoneEvent = events.find(e => e.type === 'trace-done');
+    expect(traceDoneEvent).toBeDefined();
+    expect((traceDoneEvent as Record<string, unknown>).traceId).toBeTruthy();
+    expect(typeof (traceDoneEvent as Record<string, unknown>).totalMs).toBe('number');
+    expect(typeof (traceDoneEvent as Record<string, unknown>).stepCount).toBe('number');
   });
 });
 

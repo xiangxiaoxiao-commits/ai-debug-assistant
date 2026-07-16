@@ -46,3 +46,11 @@ export function featureFile(featureId: string): string {
 export function featuresIndexFile(): string {
   return path.join(featuresDir(), 'index.json');
 }
+
+export function tracesDir(caseId: string): string {
+  return path.join(caseDir(caseId), 'traces');
+}
+
+export function traceFile(caseId: string, traceId: string): string {
+  return path.join(tracesDir(caseId), `${traceId}.json`);
+}

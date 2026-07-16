@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -6,10 +6,18 @@ import { NextRequest } from 'next/server';
 import { POST as postCase, GET as listCasesRoute } from '@/app/api/cases/route';
 import { GET as getCaseRoute, DELETE as deleteCaseRoute } from '@/app/api/cases/[id]/route';
 
+vi.mock('@/server/llm-client', () => ({
+  streamLlm: vi.fn()
+}));
+
+import { streamLlm } from '@/server/llm-client';
+import { writeSavedConfig } from '@/server/config-store';
+
 let tmp: string;
 beforeEach(async () => {
   tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'ada-api-'));
   process.env.AI_DEBUG_HOME = tmp;
+  vi.resetAllMocks();
 });
 afterEach(async () => {
   await fs.rm(tmp, { recursive: true, force: true });
@@ -66,5 +74,36 @@ describe('cases API', () => {
 
     const after = await getCaseRoute(emptyReq(), { params: Promise.resolve({ id: created.case.id }) });
     expect(after.status).toBe(404);
+  });
+
+  it('POST 成功（有 LLM config） → 响应包含 trace.id 且 case 有 playbook', async () => {
+    async function* classifyStream() {
+      yield { type: 'text' as const, text: JSON.stringify({ featureName: '审批', matchedExistingId: null, confidence: 0.9, reasoning: '...' }) };
+      yield { type: 'done' as const };
+    }
+    async function* playbookStream() {
+      yield { type: 'text' as const, text: JSON.stringify({ steps: [{ title: '抓接口 cURL' }, { title: '检查数据库' }] }) };
+      yield { type: 'done' as const };
+    }
+
+    // No resolved similar cases exist, so only 2 LLM calls: classify + generatePlaybook
+    vi.mocked(streamLlm)
+      .mockImplementationOnce(() => classifyStream())
+      .mockImplementationOnce(() => playbookStream());
+
+    await writeSavedConfig({
+      provider: 'openai-compatible',
+      baseUrl: 'http://localhost:11434',
+      apiKey: 'k',
+      model: 'gpt-4'
+    });
+
+    const res = await postCase(jsonReq({ problem: { actual: 'a', expected: 'b', entry: 'c', environment: 'd' } }));
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.trace).toBeDefined();
+    expect(body.trace.id).toBeTruthy();
+    expect(body.case.playbook).toBeDefined();
+    expect(body.case.playbook.steps.length).toBeGreaterThan(0);
   });
 });

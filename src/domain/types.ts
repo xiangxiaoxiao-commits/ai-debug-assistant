@@ -1,5 +1,61 @@
 import type { STEP_NAMES, STEP_STATUSES, CASE_STATUSES, EVIDENCE_TYPES, EVIDENCE_LEVELS } from './constants';
 
+// ─── Trace ────────────────────────────────────────────────────────────────────
+
+export interface TraceStep {
+  id: string;
+  kind:
+    | 'classify-feature'
+    | 'find-similar'
+    | 'load-knowledge'
+    | 'quick-ingest'
+    | 'read-code'
+    | 'build-prompt'
+    | 'llm-call'
+    | 'extract-summary'
+    | 'extract-lesson'
+    | 'refresh-knowledge'
+    | 'update-playbook';
+  label: string;
+  startedAt: string;
+  endedAt: string;
+  durationMs: number;
+  status: 'ok' | 'skipped' | 'failed';
+  detail?: string;
+  error?: string;
+  meta?: Record<string, unknown>;
+}
+
+export interface Trace {
+  id: string;
+  caseId: string;
+  triggeredBy: 'create-case' | 'send-message' | 'change-status' | 'refresh-knowledge';
+  triggerRef?: string;
+  createdAt: string;
+  totalMs: number;
+  steps: TraceStep[];
+}
+
+// ─── Playbook ─────────────────────────────────────────────────────────────────
+
+export interface PlaybookStep {
+  id: string;
+  order: number;
+  title: string;
+  hint?: string;
+  status: 'todo' | 'doing' | 'done' | 'skipped';
+  evidenceRefs?: string[];
+  notes?: string;
+  updatedAt: string;
+  updatedBy: 'user' | 'llm';
+}
+
+export interface Playbook {
+  steps: PlaybookStep[];
+  source: 'auto' | 'user' | 'template';
+  updatedAt: string;
+}
+
 export type StepName = (typeof STEP_NAMES)[number];
 export type StepStatus = (typeof STEP_STATUSES)[number];
 export type CaseStatus = (typeof CASE_STATUSES)[number];
@@ -89,6 +145,8 @@ export interface Case {
   featureId?: string;
   relatedCaseIds?: string[];
   lessons?: Lesson;
+  playbook?: Playbook;
+  traceIds?: string[];
 }
 
 export interface Evidence {

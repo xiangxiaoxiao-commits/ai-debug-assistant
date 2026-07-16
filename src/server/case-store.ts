@@ -1,8 +1,8 @@
 import fs from 'node:fs/promises';
 import { v4 as uuid } from 'uuid';
-import type { Case, Message, BugSummary, BugStatus } from '@/domain/types';
-import { caseSchema, createCaseInputSchema } from '@/domain/schemas';
-import { caseDir, caseFile, casesDir } from './paths';
+import type { Case, Message, BugSummary, BugStatus, Playbook, Trace } from '@/domain/types';
+import { caseSchema, createCaseInputSchema, traceSchema } from '@/domain/schemas';
+import { caseDir, caseFile, casesDir, tracesDir, traceFile } from './paths';
 import { writeJsonAtomic, readJson, fileExists } from './fs-atomic';
 import { createInitialPipelineState } from './pipeline-init';
 import { z } from 'zod';
@@ -124,4 +124,41 @@ export async function updateCaseStatus(caseId: string, status: BugStatus): Promi
   const updated = await updateCase({ ...kase, summary, status: caseStatus });
   const { upsertIndexEntry } = await import('./index-store');
   await upsertIndexEntry(updated);
+}
+
+export async function updatePlaybook(caseId: string, playbook: Playbook): Promise<void> {
+  const kase = await getCase(caseId);
+  await updateCase({ ...kase, playbook });
+}
+
+export async function appendTraceId(caseId: string, traceId: string): Promise<void> {
+  const kase = await getCase(caseId);
+  const existing = kase.traceIds ?? [];
+  if (!existing.includes(traceId)) {
+    await updateCase({ ...kase, traceIds: [...existing, traceId] });
+  }
+}
+
+export async function listTraces(caseId: string): Promise<Trace[]> {
+  const dir = tracesDir(caseId);
+  if (!(await fileExists(dir))) return [];
+  const entries = await fs.readdir(dir);
+  const traces: Trace[] = [];
+  for (const e of entries) {
+    if (!e.endsWith('.json')) continue;
+    try {
+      const raw = await readJson<unknown>(traceFile(caseId, e.replace('.json', '')));
+      traces.push(traceSchema.parse(raw));
+    } catch {
+      // skip corrupted traces
+    }
+  }
+  return traces.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+export async function getTrace(caseId: string, traceId: string): Promise<Trace> {
+  const file = traceFile(caseId, traceId);
+  if (!(await fileExists(file))) throw new Error(`Trace not found: ${traceId}`);
+  const raw = await readJson<unknown>(file);
+  return traceSchema.parse(raw);
 }
