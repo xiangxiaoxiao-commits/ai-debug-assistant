@@ -14,6 +14,7 @@ import { classifyFeature } from '@/server/feature-classifier';
 import { findSimilarCases } from '@/server/similarity-search';
 import { generatePlaybook } from '@/server/playbook-generator';
 import { TraceRecorder } from '@/server/trace-recorder';
+import { resolveProjectForCase } from '@/server/memory-integration';
 import type { Feature } from '@/domain/types';
 
 export async function GET() {
@@ -39,6 +40,18 @@ export async function POST(req: NextRequest) {
 
   // Create the case first
   let c = await createCase(parsed.data);
+
+  // Resolve/create the Project this case belongs to (based on repoPath).
+  // Purely local operation — no LLM needed here.
+  try {
+    const project = await resolveProjectForCase({
+      repoPath: parsed.data.meta?.repoPath,
+      module: parsed.data.meta?.module
+    });
+    c = await updateCase({ ...c, projectId: project.id });
+  } catch (e) {
+    warnings.push(`project resolution failed: ${(e as Error).message}`);
+  }
 
   // Attempt classification if config is available
   const cfg = await readSavedConfig();

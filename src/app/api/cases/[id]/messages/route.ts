@@ -11,6 +11,7 @@ import { extractSummary } from '@/server/summary-extractor';
 import { getFeature } from '@/server/feature-store';
 import { TraceRecorder } from '@/server/trace-recorder';
 import { updatePlaybookProgress } from '@/server/playbook-updater';
+import { buildProjectMemoryContext } from '@/server/memory-integration';
 import type { Case, Evidence, FeatureKnowledge } from '@/domain/types';
 
 export const dynamic = 'force-dynamic';
@@ -155,6 +156,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           }
         }
 
+        // load-project-memory: recall relevant memories for this project
+        let projectMemoryText = '';
+        if (freshCase.projectId) {
+          try {
+            const query = parsed.data.text || freshCase.problem.actual;
+            const ctx = await recorder.step(
+              'load-knowledge',
+              '加载项目记忆',
+              () => buildProjectMemoryContext(freshCase.projectId, query, 2500)
+            );
+            projectMemoryText = ctx.text;
+            emitStep();
+          } catch {
+            emitStep();
+          }
+        } else {
+          recorder.add({ kind: 'load-knowledge', label: '无关联项目，跳过项目记忆召回', status: 'skipped' });
+          emitStep();
+        }
+
         const opts = buildConversationPrompt({
           problem: freshCase.problem,
           meta: freshCase.meta,
@@ -163,7 +184,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           messages: freshCase.messages ?? [],
           currentSummary: freshCase.summary,
           featureKnowledge,
-          relatedCases: relatedCasesForPrompt
+          relatedCases: relatedCasesForPrompt,
+          projectMemoryText
         });
 
         const promptChars = opts.userPrompt.length + opts.systemPrompt.length;

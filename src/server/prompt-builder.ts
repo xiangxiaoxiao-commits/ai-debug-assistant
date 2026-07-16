@@ -225,8 +225,9 @@ export function buildConversationPrompt(input: {
   currentSummary?: BugSummary;
   featureKnowledge?: FeatureKnowledge;
   relatedCases?: { headline?: string; rootCause?: string; fix?: string }[];
+  projectMemoryText?: string;   // pre-rendered project context (identity + recalled memories)
 }): LlmCallOptions {
-  const { problem, meta, evidences, code, messages, currentSummary, featureKnowledge, relatedCases } = input;
+  const { problem, meta, evidences, code, messages, currentSummary, featureKnowledge, relatedCases, projectMemoryText } = input;
 
   const summarySection = currentSummary
     ? `## 当前 Bug 摘要\n${renderBugSummary(currentSummary)}`
@@ -246,10 +247,12 @@ export function buildConversationPrompt(input: {
   const taskPart = `## 当前任务\n基于以上，回答用户的最新消息。保持结构化输出（一句话结论 / 已确认事实 / 根因假设 / 建议验证 / 建议修复 / 还需要什么信息）。`;
 
   const featureInjection = buildFeatureInjection(featureKnowledge, relatedCases);
+  const projectSection = projectMemoryText && projectMemoryText.trim() ? projectMemoryText.trim() : '';
 
   // Calculate budget for evidence + history
   const fixedChars =
     CONVERSATION_SYSTEM_PROMPT.length +
+    projectSection.length +
     featureInjection.length +
     summarySection.length +
     problemSection.length +
@@ -266,9 +269,10 @@ export function buildConversationPrompt(input: {
   const historyText = buildHistorySection(messages, historyBudget);
   const historySection = historyText ? `## 对话历史\n${historyText}` : '';
 
-  const parts = featureInjection
-    ? [featureInjection, summarySection, problemSection, evidenceSection, codePart]
-    : [summarySection, problemSection, evidenceSection, codePart];
+  const parts: string[] = [];
+  if (projectSection) parts.push(projectSection);
+  if (featureInjection) parts.push(featureInjection);
+  parts.push(summarySection, problemSection, evidenceSection, codePart);
   if (historySection) parts.push(historySection);
   parts.push(taskPart);
 

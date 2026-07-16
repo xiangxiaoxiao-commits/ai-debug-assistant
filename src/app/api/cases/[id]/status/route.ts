@@ -6,6 +6,7 @@ import { readSavedConfig } from '@/server/config-store';
 import { incrementFeatureStats } from '@/server/feature-store';
 import { extractLesson } from '@/server/lesson-extractor';
 import { refreshFeatureKnowledge } from '@/server/knowledge-builder';
+import { promoteLessonToMemory } from '@/server/memory-integration';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,40 +41,51 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const updated = await getCase(id);
 
-  // Fire-and-forget: handle feature side effects
-  if (kase.featureId) {
-    const featureId = kase.featureId;
-    const isTransitionToResolved = parsed.data.status === 'resolved' && prevStatus !== 'resolved';
-    const isTransitionFromResolved = prevStatus === 'resolved' && parsed.data.status !== 'resolved';
+  const isTransitionToResolved = parsed.data.status === 'resolved' && prevStatus !== 'resolved';
+  const isTransitionFromResolved = prevStatus === 'resolved' && parsed.data.status !== 'resolved';
 
-    void (async () => {
-      try {
-        if (isTransitionToResolved) {
-          await incrementFeatureStats(featureId, { resolved: 1 });
-          const cfg = await readSavedConfig();
-          if (cfg) {
-            const freshCase = await getCase(id);
-            const lesson = await extractLesson(cfg, {
-              kase: freshCase,
-              messages: freshCase.messages ?? []
-            }).catch(() => null);
-            if (lesson) {
-              await updateCase({ ...freshCase, lessons: lesson });
-            }
-            await refreshFeatureKnowledge(featureId, cfg);
-          }
-        } else if (isTransitionFromResolved) {
-          await incrementFeatureStats(featureId, { resolved: -1 });
-          const cfg = await readSavedConfig();
-          if (cfg) {
-            await refreshFeatureKnowledge(featureId, cfg);
-          }
+  // Fire-and-forget: feature stats + knowledge refresh + memory promotion.
+  // Runs regardless of whether the case has a featureId; only the feature-
+  // specific work is scoped by `if (featureId)`.
+  void (async () => {
+    try {
+      const cfg = await readSavedConfig();
+      const featureId = kase.featureId;
+
+      if (isTransitionToResolved) {
+        if (featureId) await incrementFeatureStats(featureId, { resolved: 1 });
+        if (!cfg) return;
+
+        const freshCase = await getCase(id);
+        const lesson = await extractLesson(cfg, {
+          kase: freshCase,
+          messages: freshCase.messages ?? []
+        }).catch(() => null);
+        if (lesson) {
+          await updateCase({ ...freshCase, lessons: lesson });
         }
-      } catch {
-        // non-fatal — feature side effects never block status update
+        if (featureId) await refreshFeatureKnowledge(featureId, cfg);
+
+        // Promote to project-level memory (semantic + procedural)
+        if (freshCase.projectId) {
+          await promoteLessonToMemory(cfg, {
+            projectId: freshCase.projectId,
+            problem: freshCase.problem,
+            rootCause: freshCase.summary?.rootCause ?? lesson?.rootCause,
+            fix: freshCase.summary?.fixApproach ?? lesson?.fix,
+            caseId: id
+          }).catch(() => ({ added: 0, reinforced: 0 }));
+        }
+      } else if (isTransitionFromResolved) {
+        if (featureId) await incrementFeatureStats(featureId, { resolved: -1 });
+        if (cfg && featureId) {
+          await refreshFeatureKnowledge(featureId, cfg);
+        }
       }
-    })();
-  }
+    } catch {
+      // non-fatal — side effects never block status update
+    }
+  })();
 
   return Response.json({ summary: updated.summary });
 }
