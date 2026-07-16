@@ -32,7 +32,17 @@ beforeEach(async () => {
   vi.resetAllMocks();
 });
 afterEach(async () => {
-  await fs.rm(tmp, { recursive: true, force: true });
+  // Retry a couple times: fire-and-forget lesson extraction may still be
+  // touching features/ when cleanup starts.
+  for (let i = 0; i < 3; i++) {
+    try {
+      await fs.rm(tmp, { recursive: true, force: true });
+      break;
+    } catch (e) {
+      if (i === 2) throw e;
+      await new Promise(r => setTimeout(r, 30));
+    }
+  }
   delete process.env.AI_DEBUG_HOME;
 });
 
@@ -130,5 +140,8 @@ describe('PATCH /status — feature integration', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.summary.status).toBe('resolved');
+
+    // Let the fire-and-forget rejection settle before cleanup
+    await new Promise(r => setTimeout(r, 50));
   });
 });
