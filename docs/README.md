@@ -1,5 +1,11 @@
 # 文档目录
 
+## 想接入通用记忆系统？
+
+- **[MEMORY.md](./MEMORY.md)** —— Memory Service 外挂：HTTP + MCP + TS/Python SDK 三种接入方式
+  可用于 Claude Desktop / Claude Code / Cursor / Aider / 自研 agent。
+  10 个工具：ensure_project / remember / recall / list_memories / update_memory / forget / ...
+
 ## 想理解代码怎么跑的？（从这里开始）
 
 **两条最长的链路**，分别对应"新建 Bug"和"追问/补数据"两个核心动作：

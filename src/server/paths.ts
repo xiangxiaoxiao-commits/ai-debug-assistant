@@ -54,3 +54,29 @@ export function tracesDir(caseId: string): string {
 export function traceFile(caseId: string, traceId: string): string {
   return path.join(tracesDir(caseId), `${traceId}.json`);
 }
+
+// ─── Memory service paths ─────────────────────────────────────────────────────
+
+export function memoryRoot(): string {
+  return path.join(getRoot(), 'memory');
+}
+
+export function projectsIndexFile(): string {
+  return path.join(memoryRoot(), 'projects', 'index.json');
+}
+
+export function projectDir(projectId: string): string {
+  return path.join(memoryRoot(), 'projects', projectId);
+}
+
+export function projectFile(projectId: string): string {
+  return path.join(projectDir(projectId), 'project.json');
+}
+
+export function memoriesDir(projectId: string): string {
+  return path.join(projectDir(projectId), 'memories');
+}
+
+export function memoryFile(projectId: string, memoryId: string): string {
+  return path.join(memoriesDir(projectId), `${memoryId}.json`);
+}

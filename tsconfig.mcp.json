@@ -1,0 +1,28 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "es2022",
+    "moduleResolution": "node",
+    "noEmit": false,
+    "outDir": "dist/mcp",
+    "declaration": false,
+    "sourceMap": false,
+    "isolatedModules": false,
+    "jsx": "react",
+    "types": ["node"]
+  },
+  "include": [
+    "src/mcp/**/*",
+    "src/memory/**/*",
+    "src/domain/memory.ts",
+    "src/domain/schemas.ts",
+    "src/domain/types.ts",
+    "src/domain/constants.ts",
+    "src/domain/evidence-level.ts",
+    "src/domain/model-config.ts",
+    "src/server/paths.ts",
+    "src/server/fs-atomic.ts"
+  ],
+  "exclude": ["node_modules", ".next", "dist", "tests"]
+}
