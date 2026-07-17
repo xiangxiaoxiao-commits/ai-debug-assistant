@@ -30,6 +30,40 @@ export default function HomePage() {
   const [streamingText, setStreamingText] = useState('');
   const [streamStatus, setStreamStatus] = useState<StreamStatus>('idle');
   const [streamError, setStreamError] = useState<string | null>(null);
+  const [liveSteps, setLiveSteps] = useState<import('@/components/bug/live-trace').LiveStep[]>([]);
+  // Right panel (flow diagram) width, resizable via drag handle. Persisted to localStorage.
+  const [flowPanelWidth, setFlowPanelWidth] = useState<number>(() => {
+    if (typeof window === 'undefined') return 400;
+    const saved = window.localStorage.getItem('ada:flowPanelWidth');
+    const n = saved ? parseInt(saved, 10) : NaN;
+    return Number.isFinite(n) && n >= 240 && n <= 900 ? n : 400;
+  });
+  const dragStateRef = useRef<{ startX: number; startW: number } | null>(null);
+
+  const onFlowDragStart = useCallback((e: React.MouseEvent) => {
+    dragStateRef.current = { startX: e.clientX, startW: flowPanelWidth };
+    const onMove = (ev: MouseEvent) => {
+      if (!dragStateRef.current) return;
+      const dx = dragStateRef.current.startX - ev.clientX;   // drag left = grow
+      const next = Math.max(240, Math.min(900, dragStateRef.current.startW + dx));
+      setFlowPanelWidth(next);
+    };
+    const onUp = () => {
+      dragStateRef.current = null;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      window.localStorage.setItem('ada:flowPanelWidth', String(flowPanelWidth));
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [flowPanelWidth]);
+
+  // Persist width on every change (belt-and-suspenders vs onUp)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('ada:flowPanelWidth', String(flowPanelWidth));
+    }
+  }, [flowPanelWidth]);
   const [submitting, setSubmitting] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -101,6 +135,7 @@ export default function HomePage() {
     setStreamStatus('streaming');
     setStreamingText('');
     setStreamError(null);
+    setLiveSteps([]);
 
     let acc = '';
     let pendingUserMsgId: string | null = null;
@@ -111,6 +146,8 @@ export default function HomePage() {
         } else if (chunk.type === 'text') {
           acc += chunk.text;
           setStreamingText(acc);
+        } else if (chunk.type === 'trace-step') {
+          setLiveSteps(prev => [...prev, chunk.step]);
         } else if (chunk.type === 'summary') {
           setSummary(chunk.summary);
         } else if (chunk.type === 'trace-done') {
@@ -250,7 +287,10 @@ export default function HomePage() {
         onNewSession={activeCaseId ? handleNewCase : undefined}
       />
 
-      <div className="grid grid-cols-[280px_minmax(0,1fr)_400px] gap-3 p-3 h-[calc(100vh-49px)] overflow-hidden">
+      <div
+        className="grid gap-3 p-3 h-[calc(100vh-49px)] overflow-hidden"
+        style={{ gridTemplateColumns: `280px minmax(0,1fr) 6px ${flowPanelWidth}px` }}
+      >
         <aside className="rounded border border-slate-800 bg-slate-900/40 p-3 overflow-hidden flex flex-col">
           <SidebarTabs active={sidebarTab} onChange={setSidebarTab} />
           <div className="flex-1 overflow-y-auto min-h-0">
@@ -298,6 +338,7 @@ export default function HomePage() {
                   streamingText={streamingText}
                   streamingStatus={streamStatus}
                   streamingError={streamError}
+                  liveSteps={liveSteps}
                   messageTraceMap={messageTraceMap.current}
                   traceById={traceById}
                   caseId={activeCaseId}
@@ -328,6 +369,12 @@ export default function HomePage() {
             </div>
           )}
         </main>
+
+        <div
+          onMouseDown={onFlowDragStart}
+          className="cursor-col-resize hover:bg-slate-700 bg-slate-800/50 rounded-full transition-colors"
+          title="拖动调整流程图面板宽度"
+        />
 
         <FlowPanel messages={messages} streamingText={streamingText} streamingStatus={streamStatus} />
       </div>

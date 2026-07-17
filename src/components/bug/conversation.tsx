@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import type { Message, Trace } from '@/domain/types';
 import { SectionedReport } from '@/components/bug/sectioned-report';
 import { TraceTimeline } from '@/components/trace/trace-timeline';
+import { LiveTrace, type LiveStep } from '@/components/bug/live-trace';
 import { stripFlows } from '@/lib/flow-extract';
 
 interface Props {
@@ -10,12 +11,13 @@ interface Props {
   streamingText: string;
   streamingStatus: 'idle' | 'streaming' | 'done' | 'error';
   streamingError: string | null;
+  liveSteps?: LiveStep[];
   caseId?: string;
   messageTraceMap?: Map<string, string>;
   traceById?: Map<string, Trace>;
 }
 
-export function Conversation({ messages, streamingText, streamingStatus, streamingError, caseId, messageTraceMap, traceById }: Props) {
+export function Conversation({ messages, streamingText, streamingStatus, streamingError, liveSteps, caseId, messageTraceMap, traceById }: Props) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -38,14 +40,22 @@ export function Conversation({ messages, streamingText, streamingStatus, streami
       })}
 
       {streamingStatus === 'streaming' && (
-        <div className="space-y-2">
+        <div className="space-y-2 rounded-lg border border-slate-800 bg-slate-900/40 p-3">
           <div className="text-[10px] uppercase tracking-wide text-yellow-400 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
             AI 分析中…
           </div>
-          {streamingText
-            ? <SectionedReport source={stripFlows(streamingText)} />
-            : <div className="text-xs text-slate-500 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">（等待模型返回…）</div>}
+          {liveSteps && liveSteps.length > 0 && (
+            <LiveTrace steps={liveSteps} finished={false} />
+          )}
+          {streamingText && (
+            <div className="pt-2 border-t border-slate-800">
+              <SectionedReport source={stripFlows(streamingText)} />
+            </div>
+          )}
+          {!streamingText && (!liveSteps || liveSteps.length === 0) && (
+            <div className="text-xs text-slate-500">（等待模型返回…）</div>
+          )}
         </div>
       )}
 

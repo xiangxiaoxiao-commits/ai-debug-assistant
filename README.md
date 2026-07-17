@@ -2,7 +2,7 @@
 
 本地优先的 AI 排障助手。粘贴问题 + 日志 + cURL + SQL + **截图**，多轮对话式定位 bug，自动维护「一个 bug 一份档案」和「一个项目一份记忆」。
 
-**版本**：0.5.0
+**版本**：0.6.0
 **GitHub**：<https://github.com/xiangxiaoxiao-commits/ai-debug-assistant>
 
 ## 特性
@@ -11,7 +11,9 @@
 - **Bug 档案管理**：每个 bug 一个 Case，AI 自动生成状态（待分析/排查中/已解决/搁置）+ 一句话结论 + 根因 + 修复方案
 - **多模态输入**：粘贴 / 拖拽 / 上传截图，AI 直接看图分析（自动匹配 vision-capable 模型：Claude Opus/Sonnet/Haiku、GPT-4o、Qwen-VL、GLM-4V…）
 - **代码上下文**：给出仓库路径，AI 会 grep 关键文件片段
-- **可视化 AI 执行链路**：每次分析显示 8-9 步 trace timeline，含耗时条形图；哪步慢一目了然
+- **右侧独立流程图面板**：AI 每次分析输出的 ASCII 代码执行链路（含 `[Class.method:行号]` 高亮）单独展示在右侧，可拖拽调整宽度（240px–900px，位置持久化）
+- **实时进度反馈**：等 LLM 回复期间，实时显示每一步 trace 完成情况（快速录入 / 读代码 / 加载知识 / 构建 prompt / LLM 调用 …），不会让人怀疑是否卡住
+- **可视化 AI 执行链路**：每次分析 8-9 步 trace timeline，含耗时条形图
 - **可编辑 Playbook**：AI 自动生成排障流程模板，用户可增/删/改/重排步骤
 - **项目记忆自动进化**：Bug 解决时自动提炼教训沉淀到项目记忆；下次同项目新 bug 自动召回历史经验
 - **Feature 自动分类**：Bug 按业务模块归类，同模块共享知识库
@@ -206,6 +208,7 @@ npm run build       # 生产构建
 
 ## 版本
 
+- **0.6.0** — 右侧独立流程图面板（可拖拽宽度）+ 实时 trace 进度反馈 + AI 输出分卡（智能识别 ## 标题）
 - **0.5.0** — Vision 端到端（截图上传 + 多模态 LLM）
 - **0.4.0** — UI 全套（Trace timeline + Playbook 编辑 + 项目记忆浏览器）
 - **0.3.0** — 独立 memory service（HTTP + MCP + SDK）+ 内部自吃
