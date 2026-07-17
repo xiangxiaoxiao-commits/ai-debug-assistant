@@ -88,7 +88,7 @@ export function CaseForm({ onCreated }: { onCreated: (id: string) => void }) {
         <span className="text-xs text-slate-300 font-medium">代码仓库路径 <span className="text-slate-500">(可选)</span></span>
         <input
           className="w-full bg-slate-800 rounded px-2 py-1 text-sm"
-          placeholder="例：/Users/you/work/backend"
+          placeholder="例：/Users/you/work/backend (Mac) 或 C:\Users\you\work\backend (Win)"
           value={meta.repoPath}
           onChange={e => setMeta({ ...meta, repoPath: e.target.value })} />
         <p className="text-[10px] text-slate-500">Phase 4 起会用来搜代码；现在填也没影响</p>

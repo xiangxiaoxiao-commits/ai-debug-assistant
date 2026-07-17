@@ -112,17 +112,20 @@ export async function listProjects(): Promise<Project[]> {
   return projects;
 }
 
+const IS_WINDOWS = process.platform === 'win32';
+const pathsEqual = (a: string, b: string) => IS_WINDOWS ? a.toLowerCase() === b.toLowerCase() : a === b;
+
 export async function findProjectByRepoPath(repoPath: string): Promise<Project | null> {
   const normalized = normalizeRepoPath(repoPath);
   if (!normalized) return null;
   const index = await readIndex();
   for (const entry of index) {
-    if (entry.repoPath === normalized) return tryGetProject(entry.id);
+    if (entry.repoPath && pathsEqual(entry.repoPath, normalized)) return tryGetProject(entry.id);
   }
   // fallback: check aliases
   for (const entry of index) {
     const p = await tryGetProject(entry.id);
-    if (p?.aliases?.includes(normalized)) return p;
+    if (p?.aliases?.some(a => pathsEqual(a, normalized))) return p;
   }
   return null;
 }

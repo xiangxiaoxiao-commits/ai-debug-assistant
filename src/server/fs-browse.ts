@@ -3,12 +3,29 @@ import path from 'node:path';
 import os from 'node:os';
 
 const HOME = os.homedir();
+const IS_WINDOWS = process.platform === 'win32';
 
 const IGNORED_DIRS = new Set([
+  // Common
   '.git', 'node_modules', 'target', 'dist', 'build', '.next', 'out',
   'coverage', '.venv', '__pycache__', '.idea', '.vscode', '.turbo',
-  '.cache', 'Library', '.Trash'
+  '.cache',
+  // macOS / Linux user-dir noise
+  'Library', '.Trash',
+  // Windows user-dir noise
+  'AppData', 'Application Data', 'Local Settings',
+  'NTUSER.DAT', 'NTUSER.INI'
 ]);
+
+function pathsEqual(a: string, b: string): boolean {
+  return IS_WINDOWS ? a.toLowerCase() === b.toLowerCase() : a === b;
+}
+
+function pathStartsWith(a: string, prefix: string): boolean {
+  return IS_WINDOWS
+    ? a.toLowerCase().startsWith(prefix.toLowerCase())
+    : a.startsWith(prefix);
+}
 
 export interface BrowseEntry {
   name: string;
@@ -25,7 +42,7 @@ export interface BrowseResult {
 
 function isUnderHome(p: string): boolean {
   const resolved = path.resolve(p);
-  return resolved === HOME || resolved.startsWith(HOME + path.sep);
+  return pathsEqual(resolved, HOME) || pathStartsWith(resolved, HOME + path.sep);
 }
 
 export async function browseDir(inputPath?: string): Promise<BrowseResult> {
@@ -63,7 +80,7 @@ export async function browseDir(inputPath?: string): Promise<BrowseResult> {
     };
   }
 
-  const parent = target === HOME ? null : path.dirname(target);
+  const parent = pathsEqual(target, HOME) ? null : path.dirname(target);
   let names: string[];
   try {
     names = await fs.readdir(target);
@@ -84,7 +101,9 @@ export async function browseDir(inputPath?: string): Promise<BrowseResult> {
       // but we don't list .git as an entry, only use it to flag parent
       continue;
     }
-    if (IGNORED_DIRS.has(name)) continue;
+    if (IS_WINDOWS
+      ? Array.from(IGNORED_DIRS).some(d => d.toLowerCase() === name.toLowerCase())
+      : IGNORED_DIRS.has(name)) continue;
     const full = path.join(target, name);
     let s;
     try { s = await fs.stat(full); } catch { continue; }

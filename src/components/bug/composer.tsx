@@ -77,7 +77,7 @@ export function Composer({ disabled, submitting, repoPath, onRepoPathChange, onS
           <input
             type="text"
             className="flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-xs font-mono"
-            placeholder="/Users/you/work/backend"
+            placeholder="/Users/you/work/backend (Mac) 或 C:\Users\you\work\backend (Win)"
             value={repoPath ?? ''}
             onChange={e => onRepoPathChange(e.target.value)}
             disabled={disabled || submitting}

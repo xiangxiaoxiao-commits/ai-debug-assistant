@@ -57,7 +57,10 @@ export function FolderPicker({ open, initialPath, onClose, onPick }: Props) {
 
   const goInto = (name: string) => {
     if (!data) return;
-    const next = data.path.endsWith('/') ? data.path + name : `${data.path}/${name}`;
+    // Detect separator from current path: Windows dirs contain "\", *nix use "/"
+    const sep = data.path.includes('\\') ? '\\' : '/';
+    const trimmed = data.path.replace(/[/\\]+$/, '');
+    const next = `${trimmed}${sep}${name}`;
     load(next);
   };
 

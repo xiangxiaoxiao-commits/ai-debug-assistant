@@ -1,6 +1,6 @@
 {
   "name": "ai-debug-assistant",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": true,
   "scripts": {
     "dev": "next dev -p 8787",
@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "build:mcp": "node scripts/build-mcp.mjs",
-    "mcp:memory": "node dist/mcp/memory-server.js"
+    "mcp:memory": "node dist/mcp/memory-server.js",
+    "package": "node scripts/package.mjs"
   },
   "dependencies": {
     "next": "15.0.3",

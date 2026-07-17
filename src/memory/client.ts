@@ -64,7 +64,7 @@ export class MemoryClient {
       if (hit) return hit;
     }
     const { project } = await this.createProject({
-      name: input.name || input.repoPath?.split('/').pop() || 'project',
+      name: input.name || input.repoPath?.split(/[/\\]/).filter(Boolean).pop() || 'project',
       repoPath: input.repoPath
     });
     return project;

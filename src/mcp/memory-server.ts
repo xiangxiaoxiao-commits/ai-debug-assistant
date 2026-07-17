@@ -80,7 +80,7 @@ const tools: ToolDef[] = [
         return { project: def, created: false };
       }
       const project = await createProject({
-        name: name || (repoPath ?? '未命名').split('/').pop() || 'project',
+        name: name || (repoPath ?? '未命名').split(/[/\\]/).filter(Boolean).pop() || 'project',
         repoPath,
         aliases: args.aliases as string[] | undefined
       });

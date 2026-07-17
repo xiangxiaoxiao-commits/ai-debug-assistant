@@ -8,7 +8,8 @@ export function normalizeRepoPath(p: string | undefined | null): string | undefi
   if (!trimmed) return undefined;
   const expanded = trimmed.startsWith('~') ? path.join(os.homedir(), trimmed.slice(1)) : trimmed;
   const resolved = path.resolve(expanded);
-  return resolved.replace(/\/+$/, '');
+  // Strip trailing separators (both / and \)
+  return resolved.replace(/[/\\]+$/, '');
 }
 
 /** Derive a display name from a repo path — last non-empty path segment. */

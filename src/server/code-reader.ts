@@ -32,23 +32,45 @@ const IGNORED_DIRS = new Set([
   '.idea', '.vscode'
 ]);
 
-const REJECTED_ROOTS = ['/etc', '/var', '/private', '/System', '/usr'];
+// Unix-style rejected roots. On Windows these paths generally don't exist
+// or are irrelevant, so the $HOME check below is what actually protects us.
+const REJECTED_ROOTS_UNIX = ['/etc', '/var', '/private', '/System', '/usr'];
+
+// Windows-specific sensitive dirs under home that shouldn't be scanned even
+// though they technically live in %USERPROFILE%. Case-insensitive match.
+const REJECTED_HOME_SUBDIRS_WIN = ['AppData', 'ntuser.dat', 'ntuser.ini'];
+
+const IS_WINDOWS = process.platform === 'win32';
 
 const MAX_FILE_SIZE_BYTES = 1_000_000; // 1 MB binary check
 
-/** Check if path is safe (must be under $HOME) */
+/** Check if path is safe (must be under $HOME, not in a system dir) */
 function isSafePath(resolvedPath: string): boolean {
   const home = os.homedir();
-  const normalized = resolvedPath.endsWith(path.sep)
-    ? resolvedPath
-    : resolvedPath + path.sep;
+  // On Windows the FS is case-insensitive; compare lowered for the $HOME test.
+  const eq = (a: string, b: string) => IS_WINDOWS ? a.toLowerCase() === b.toLowerCase() : a === b;
+  const startsWith = (a: string, b: string) => IS_WINDOWS
+    ? a.toLowerCase().startsWith(b.toLowerCase())
+    : a.startsWith(b);
+
   const homeNorm = home.endsWith(path.sep) ? home : home + path.sep;
-  if (!normalized.startsWith(homeNorm) && resolvedPath !== home) {
+  const pathNorm = resolvedPath.endsWith(path.sep) ? resolvedPath : resolvedPath + path.sep;
+
+  if (!startsWith(pathNorm, homeNorm) && !eq(resolvedPath, home)) {
     return false;
   }
-  for (const rejected of REJECTED_ROOTS) {
+
+  for (const rejected of REJECTED_ROOTS_UNIX) {
     if (resolvedPath === rejected || resolvedPath.startsWith(rejected + path.sep)) {
       return false;
+    }
+  }
+
+  if (IS_WINDOWS) {
+    // Reject anything under sensitive home subdirs like AppData.
+    for (const bad of REJECTED_HOME_SUBDIRS_WIN) {
+      const abs = path.join(home, bad);
+      if (eq(resolvedPath, abs) || startsWith(pathNorm, abs + path.sep)) return false;
     }
   }
   return true;

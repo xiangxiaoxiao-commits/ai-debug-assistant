@@ -48,7 +48,7 @@ const TYPE_LABELS: Record<EvidenceType, { label: string; desc: string; placehold
   'repo-path': {
     label: '代码仓库路径',
     desc: '本地代码库的绝对路径',
-    placeholder: '/Users/yourname/work/backend-service'
+    placeholder: '/Users/you/work/backend 或 C:\Users\you\work\backend'
   },
   'screenshot-note': {
     label: '截图说明',

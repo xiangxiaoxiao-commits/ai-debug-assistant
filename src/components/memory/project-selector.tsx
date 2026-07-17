@@ -25,7 +25,7 @@ export function ProjectSelector({ projects, selectedId, loading, onSelect }: Pro
           <option value="">— 选择项目 —</option>
           {projects.map(p => (
             <option key={p.id} value={p.id}>
-              {p.name}{p.repoPath ? ` (${p.repoPath.split('/').slice(-2).join('/')})` : ''}
+              {p.name}{p.repoPath ? ` (${p.repoPath.split(/[/\\]/).filter(Boolean).slice(-2).join('/')})` : ''}
             </option>
           ))}
         </select>

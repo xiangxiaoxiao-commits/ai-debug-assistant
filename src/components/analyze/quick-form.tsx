@@ -150,7 +150,7 @@ export function QuickForm({ disabled, submitting, onSubmit }: Props) {
             <input
               type="text"
               className="flex-1 bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-sm focus:outline-none focus:border-blue-600 font-mono"
-              placeholder="/Users/you/work/backend"
+              placeholder="/Users/you/work/backend (Mac) 或 C:\Users\you\work\backend (Win)"
               value={repoPath}
               onChange={e => setRepoPath(e.target.value)}
               disabled={disabled || submitting}
