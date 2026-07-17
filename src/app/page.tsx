@@ -14,6 +14,7 @@ import { MemoryPanel } from '@/components/memory/memory-panel';
 import { QuickForm, type QuickFormValue } from '@/components/analyze/quick-form';
 import { ConfigBanner } from '@/components/analyze/config-banner';
 import { SettingsModal } from '@/components/settings/settings-modal';
+import { FlowPanel } from '@/components/flow/flow-panel';
 import { HintCard } from '@/components/analyze/hint-card';
 
 type StreamStatus = 'idle' | 'streaming' | 'done' | 'error';
@@ -249,7 +250,7 @@ export default function HomePage() {
         onNewSession={activeCaseId ? handleNewCase : undefined}
       />
 
-      <div className="grid grid-cols-[280px_1fr] gap-3 p-3 h-[calc(100vh-49px)] overflow-hidden">
+      <div className="grid grid-cols-[280px_minmax(0,1fr)_400px] gap-3 p-3 h-[calc(100vh-49px)] overflow-hidden">
         <aside className="rounded border border-slate-800 bg-slate-900/40 p-3 overflow-hidden flex flex-col">
           <SidebarTabs active={sidebarTab} onChange={setSidebarTab} />
           <div className="flex-1 overflow-y-auto min-h-0">
@@ -327,6 +328,8 @@ export default function HomePage() {
             </div>
           )}
         </main>
+
+        <FlowPanel messages={messages} streamingText={streamingText} streamingStatus={streamStatus} />
       </div>
 
       <SettingsModal

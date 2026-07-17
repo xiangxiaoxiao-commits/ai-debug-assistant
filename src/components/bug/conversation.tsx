@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import type { Message, Trace } from '@/domain/types';
 import { SectionedReport } from '@/components/bug/sectioned-report';
 import { TraceTimeline } from '@/components/trace/trace-timeline';
+import { stripFlows } from '@/lib/flow-extract';
 
 interface Props {
   messages: Message[];
@@ -43,7 +44,7 @@ export function Conversation({ messages, streamingText, streamingStatus, streami
             AI 分析中…
           </div>
           {streamingText
-            ? <SectionedReport source={streamingText} />
+            ? <SectionedReport source={stripFlows(streamingText)} />
             : <div className="text-xs text-slate-500 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">（等待模型返回…）</div>}
         </div>
       )}
@@ -89,7 +90,7 @@ function Bubble({ message, caseId, trace }: { message: Message; caseId?: string;
       {isUser ? (
         <div className="text-sm text-slate-200 whitespace-pre-wrap">{message.content}</div>
       ) : (
-        <SectionedReport source={message.content} />
+        <SectionedReport source={stripFlows(message.content)} />
       )}
       {!isUser && caseId && trace !== undefined && (
         <TraceTimeline trace={trace} />
