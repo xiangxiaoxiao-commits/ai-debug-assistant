@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef } from 'react';
 import type { Message, Trace } from '@/domain/types';
-import { Markdown } from '@/lib/markdown';
+import { SectionedReport } from '@/components/bug/sectioned-report';
 import { TraceTimeline } from '@/components/trace/trace-timeline';
 
 interface Props {
@@ -37,12 +37,14 @@ export function Conversation({ messages, streamingText, streamingStatus, streami
       })}
 
       {streamingStatus === 'streaming' && (
-        <div className="rounded-lg bg-slate-900/60 border border-slate-800 p-3">
-          <div className="text-[10px] uppercase tracking-wide text-yellow-400 mb-2 flex items-center gap-1">
+        <div className="space-y-2">
+          <div className="text-[10px] uppercase tracking-wide text-yellow-400 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse" />
             AI 分析中…
           </div>
-          <Markdown source={streamingText || '（等待模型返回…）'} />
+          {streamingText
+            ? <SectionedReport source={streamingText} />
+            : <div className="text-xs text-slate-500 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2">（等待模型返回…）</div>}
         </div>
       )}
 
@@ -61,12 +63,12 @@ export function Conversation({ messages, streamingText, streamingStatus, streami
 function Bubble({ message, caseId, trace }: { message: Message; caseId?: string; trace?: Trace | null }) {
   const isUser = message.role === 'user';
   return (
-    <div className={`rounded-lg border p-3 ${
+    <div className={
       isUser
-        ? 'bg-blue-950/30 border-blue-900/60'
-        : 'bg-slate-900/60 border-slate-800'
-    }`}>
-      <div className="flex items-center gap-2 text-[10px] uppercase tracking-wide mb-2">
+        ? 'rounded-lg border bg-blue-950/30 border-blue-900/60 p-3'
+        : 'space-y-2'
+    }>
+      <div className={`flex items-center gap-2 text-[10px] uppercase tracking-wide ${isUser ? 'mb-2' : ''}`}>
         <span className={isUser ? 'text-blue-300' : 'text-emerald-300'}>
           {isUser ? '你' : 'AI'}
         </span>
@@ -87,7 +89,7 @@ function Bubble({ message, caseId, trace }: { message: Message; caseId?: string;
       {isUser ? (
         <div className="text-sm text-slate-200 whitespace-pre-wrap">{message.content}</div>
       ) : (
-        <Markdown source={message.content} />
+        <SectionedReport source={message.content} />
       )}
       {!isUser && caseId && trace !== undefined && (
         <TraceTimeline trace={trace} />
