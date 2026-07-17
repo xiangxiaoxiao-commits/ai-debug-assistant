@@ -56,6 +56,41 @@ export async function addEvidence(caseId: string, input: AddEvidenceInput): Prom
   return evidence;
 }
 
+/** Add an evidence entry backed by one or more image attachments.  The
+ *  attachments are already written to disk by the caller (POST handler);
+ *  this function only creates the evidence.json manifest that points to them. */
+export async function addImageEvidence(caseId: string, input: {
+  attachments: NonNullable<Evidence['attachments']>;
+  description?: string;   // optional user-typed caption
+}): Promise<Evidence> {
+  if (!(await fileExists(caseFile(caseId)))) {
+    throw new Error(`Case not found: ${caseId}`);
+  }
+  const desc = (input.description ?? '').trim();
+  const evidence: Evidence = {
+    id: uuid(),
+    caseId,
+    type: 'screenshot-note',
+    createdAt: new Date().toISOString(),
+    source: 'user-upload',
+    raw: {
+      content: desc || `(${input.attachments.length} 张图片)`,
+      sizeBytes: input.attachments.reduce((s, a) => s + a.sizeBytes, 0)
+    },
+    summary: {
+      oneLine: desc
+        ? `[图片] ${desc.slice(0, 80)}`
+        : `[图片] 用户上传 ${input.attachments.length} 张截图`,
+      keywords: [],
+      tokensEstimate: Math.max(1, Math.ceil(desc.length / 4))
+    },
+    attachments: input.attachments
+  };
+  evidenceSchema.parse(evidence);
+  await writeJsonAtomic(evidenceFile(caseId, evidence.id), evidence);
+  return evidence;
+}
+
 export async function listEvidence(caseId: string): Promise<Evidence[]> {
   const dir = evidenceDir(caseId);
   if (!(await fileExists(dir))) return [];

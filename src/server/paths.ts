@@ -27,6 +27,14 @@ export function evidenceFile(caseId: string, evidenceId: string): string {
   return path.join(evidenceDir(caseId), `${evidenceId}.json`);
 }
 
+export function attachmentsDir(caseId: string): string {
+  return path.join(caseDir(caseId), 'attachments');
+}
+
+export function attachmentFile(caseId: string, attachmentId: string, ext: string): string {
+  return path.join(attachmentsDir(caseId), `${attachmentId}.${ext}`);
+}
+
 export function indexFile(): string {
   return path.join(casesDir(), 'index.json');
 }

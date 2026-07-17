@@ -6,7 +6,8 @@ import { listEvidence } from '@/server/evidence-store';
 import { readCodeContext } from '@/server/code-reader';
 import { quickIngest } from '@/server/quick-ingest';
 import { buildConversationPrompt } from '@/server/prompt-builder';
-import { streamLlm } from '@/server/llm-client';
+import { streamLlm, modelSupportsVision } from '@/server/llm-client';
+import { loadImageAttachments } from '@/server/image-loader';
 import { extractSummary } from '@/server/summary-extractor';
 import { getFeature } from '@/server/feature-store';
 import { TraceRecorder } from '@/server/trace-recorder';
@@ -188,12 +189,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           projectMemoryText
         });
 
+        // Attach images if vision-capable and evidence has attachments
+        let imageCount = 0;
+        if (modelSupportsVision(cfg)) {
+          try {
+            const images = await loadImageAttachments(id, evidences);
+            if (images.length > 0) {
+              opts.images = images;
+              imageCount = images.length;
+            }
+          } catch {
+            /* non-fatal */
+          }
+        }
+
         const promptChars = opts.userPrompt.length + opts.systemPrompt.length;
         recorder.add({
           kind: 'build-prompt',
-          label: `构建提示词 ${promptChars} 字符`,
+          label: imageCount > 0
+            ? `构建提示词 ${promptChars} 字符 · ${imageCount} 张图`
+            : `构建提示词 ${promptChars} 字符`,
           status: 'ok',
-          meta: { promptChars }
+          meta: { promptChars, imageCount }
         });
         emitStep();
 

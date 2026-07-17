@@ -160,6 +160,18 @@ export interface Evidence {
   parsed?: unknown;
   summary: { oneLine: string; keywords: string[]; tokensEstimate: number };
   sanitized?: { content: string; redactedKeys: string[] };
+  attachments?: EvidenceAttachment[];
+}
+
+export interface EvidenceAttachment {
+  id: string;                // uuid
+  kind: 'image';             // 目前仅支持图片；未来可扩展 pdf/video
+  mediaType: string;         // MIME 如 'image/png' / 'image/jpeg'
+  filename?: string;
+  sizeBytes: number;
+  path: string;              // 相对 evidenceDir 的路径，如 'attachments/{id}.png'
+  width?: number;
+  height?: number;
 }
 
 export interface CaseIndexEntry {

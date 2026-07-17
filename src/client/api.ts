@@ -30,6 +30,18 @@ export const api = {
   deleteEvidence: (caseId: string, evidenceId: string) =>
     fetch(`/api/cases/${caseId}/evidence/${evidenceId}`, { method: 'DELETE' }).then(j<{ case: Case }>),
   exportCase: (id: string) => `/api/cases/${id}/export`,
+  uploadAttachments: async (caseId: string, files: File[], description?: string) => {
+    const fd = new FormData();
+    for (const f of files) fd.append('images', f);
+    if (description) fd.append('description', description);
+    const res = await fetch(`/api/cases/${caseId}/attachments`, { method: 'POST', body: fd });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error ?? `HTTP ${res.status}`);
+    }
+    return res.json() as Promise<{ evidence: Evidence }>;
+  },
+  attachmentUrl: (caseId: string, attachmentId: string) => `/api/cases/${caseId}/attachments/${attachmentId}`,
   discoverConfig: () =>
     fetch('/api/config/discover').then(j<{ candidates: ModelCandidate[]; saved: { provider: string; baseUrl: string; model: string; apiKeyMasked: string } | null }>),
   revealCandidate: (candidateId: string) =>

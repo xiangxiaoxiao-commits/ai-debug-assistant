@@ -5,7 +5,8 @@ import os from 'node:os';
 import { NextRequest } from 'next/server';
 
 vi.mock('@/server/llm-client', () => ({
-  streamLlm: vi.fn()
+  streamLlm: vi.fn(),
+  modelSupportsVision: () => false
 }));
 
 import { POST, GET } from '@/app/api/cases/[id]/messages/route';

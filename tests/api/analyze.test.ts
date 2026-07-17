@@ -6,7 +6,8 @@ import { NextRequest } from 'next/server';
 
 // Mock llm-client before importing the route
 vi.mock('@/server/llm-client', () => ({
-  streamLlm: vi.fn()
+  streamLlm: vi.fn(),
+  modelSupportsVision: () => false
 }));
 
 import { POST } from '@/app/api/analyze/route';

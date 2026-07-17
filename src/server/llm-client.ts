@@ -1,8 +1,14 @@
 import type { ModelConfig } from '@/domain/model-config';
 
+export interface LlmImage {
+  mediaType: string;    // 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'
+  base64: string;       // raw base64, no `data:` prefix
+}
+
 export interface LlmCallOptions {
   systemPrompt: string;
   userPrompt: string;
+  images?: LlmImage[];  // if present, sent as multimodal content blocks
   maxTokens?: number;
   temperature?: number;
 }
@@ -16,6 +22,18 @@ const DEFAULT_MAX_TOKENS = 4096;
 const DEFAULT_TEMPERATURE = 0.2;
 const TIMEOUT_MS = 60_000;
 
+/** Heuristic: does the configured model name suggest vision support? */
+export function modelSupportsVision(cfg: ModelConfig): boolean {
+  const m = cfg.model.toLowerCase();
+  // Anthropic: opus / sonnet / haiku from 3+; almost all recent Claudes are vision-capable
+  if (m.includes('opus') || m.includes('sonnet') || m.includes('haiku')) return true;
+  if (m.startsWith('claude-3') || m.startsWith('claude-4')) return true;
+  // OpenAI-compatible: gpt-4o / gpt-4-turbo (vision) / gpt-4v / o1 / o3 with vision
+  if (m.includes('gpt-4o') || m.includes('gpt-4v') || m.includes('gpt-4-turbo')) return true;
+  if (m.includes('vision') || m.includes('vl')) return true;   // qwen-vl, glm-4v etc.
+  return false;
+}
+
 /** Redact apiKey from error strings before surfacing them */
 function redactKey(msg: string, apiKey: string): string {
   if (!apiKey) return msg;
@@ -27,11 +45,22 @@ async function* streamOpenAiCompatible(
   opts: LlmCallOptions,
   signal: AbortSignal
 ): AsyncGenerator<LlmChunk> {
+  const hasImages = (opts.images?.length ?? 0) > 0 && modelSupportsVision(cfg);
+  const userContent = hasImages
+    ? [
+        { type: 'text', text: opts.userPrompt },
+        ...opts.images!.map(img => ({
+          type: 'image_url',
+          image_url: { url: `data:${img.mediaType};base64,${img.base64}` }
+        }))
+      ]
+    : opts.userPrompt;
+
   const body = JSON.stringify({
     model: cfg.model,
     messages: [
       { role: 'system', content: opts.systemPrompt },
-      { role: 'user', content: opts.userPrompt }
+      { role: 'user', content: userContent }
     ],
     stream: true,
     max_tokens: opts.maxTokens ?? DEFAULT_MAX_TOKENS,
@@ -85,10 +114,21 @@ async function* streamAnthropicCompatible(
   opts: LlmCallOptions,
   signal: AbortSignal
 ): AsyncGenerator<LlmChunk> {
+  const hasImages = (opts.images?.length ?? 0) > 0 && modelSupportsVision(cfg);
+  const userContent = hasImages
+    ? [
+        ...opts.images!.map(img => ({
+          type: 'image',
+          source: { type: 'base64', media_type: img.mediaType, data: img.base64 }
+        })),
+        { type: 'text', text: opts.userPrompt }
+      ]
+    : opts.userPrompt;
+
   const body = JSON.stringify({
     model: cfg.model,
     system: opts.systemPrompt,
-    messages: [{ role: 'user', content: opts.userPrompt }],
+    messages: [{ role: 'user', content: userContent }],
     max_tokens: opts.maxTokens ?? DEFAULT_MAX_TOKENS,
     temperature: opts.temperature ?? DEFAULT_TEMPERATURE,
     stream: true

@@ -176,11 +176,19 @@ export default function HomePage() {
     }
   };
 
-  const handleFollowUp = async (text: string) => {
+  const handleFollowUp = async (text: string, images: File[]) => {
     if (!activeCaseId) return;
     setSubmitting(true);
     try {
-      await streamMessage(activeCaseId, text);
+      if (images.length > 0) {
+        try {
+          await api.uploadAttachments(activeCaseId, images, text || undefined);
+        } catch (e) {
+          setGlobalError(`图片上传失败：${(e as Error).message}`);
+          return;
+        }
+      }
+      await streamMessage(activeCaseId, text || '(用户上传了截图，请分析)');
     } finally {
       setSubmitting(false);
     }

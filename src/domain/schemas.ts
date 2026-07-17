@@ -179,7 +179,17 @@ export const evidenceSchema = z.object({
   sanitized: z.object({
     content: z.string(),
     redactedKeys: z.array(z.string())
-  }).optional()
+  }).optional(),
+  attachments: z.array(z.object({
+    id: z.string().uuid(),
+    kind: z.enum(['image']),
+    mediaType: z.string(),
+    filename: z.string().optional(),
+    sizeBytes: z.number().nonnegative(),
+    path: z.string(),
+    width: z.number().positive().optional(),
+    height: z.number().positive().optional()
+  })).optional()
 });
 
 export const createCaseInputSchema = z.object({

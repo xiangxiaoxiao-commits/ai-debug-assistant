@@ -7,7 +7,8 @@ import { POST as postCase, GET as listCasesRoute } from '@/app/api/cases/route';
 import { GET as getCaseRoute, DELETE as deleteCaseRoute } from '@/app/api/cases/[id]/route';
 
 vi.mock('@/server/llm-client', () => ({
-  streamLlm: vi.fn()
+  streamLlm: vi.fn(),
+  modelSupportsVision: () => false
 }));
 
 import { streamLlm } from '@/server/llm-client';
