@@ -167,6 +167,13 @@ export default function HomePage() {
       setSummary(null);
       setTraces([]);
       messageTraceMap.current = new Map();
+      if (v.images && v.images.length > 0) {
+        try {
+          await api.uploadAttachments(created.case.id, v.images, v.problem);
+        } catch (e) {
+          setGlobalError(`图片上传失败：${(e as Error).message}`);
+        }
+      }
       await refreshCases();
       await streamMessage(created.case.id, v.problem);
     } catch (e) {
